@@ -1,0 +1,56 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@400;600;700;800&display=swap" rel="stylesheet" />
+    <title>Fishercat</title>
+    <style>
+      :root {
+        color-scheme: dark;
+        font-family: "Archivo Black", system-ui, sans-serif;
+        background:
+          radial-gradient(circle at top, rgba(255, 212, 128, 0.35), transparent 24%),
+          linear-gradient(180deg, #172a59 0%, #102443 38%, #071523 100%);
+      }
+
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+
+      html, body {
+        width: 100%;
+        height: 100%;
+      }
+
+      body {
+        overflow: hidden;
+        touch-action: none;
+      }
+
+      #game-container {
+        width: 100%;
+        height: 100%;
+        display: grid;
+        place-items: center;
+      }
+
+      canvas {
+        display: block;
+        image-rendering: auto;
+        image-rendering: smooth;
+        filter: drop-shadow(0 18px 40px rgba(0, 0, 0, 0.28));
+      }
+    </style>
+  </head>
+  <body>
+    <div id="game-container"></div>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
+</html>
