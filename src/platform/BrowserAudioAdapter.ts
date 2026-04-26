@@ -66,6 +66,8 @@ export class BrowserAudioAdapter implements AudioAdapter {
       case 'upgradeBought':
         this.playTone(680, 0.14, 0.18, 'triangle');
         break;
+      case 'ftueDiveExited':
+        break;
     }
   }
 }

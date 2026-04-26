@@ -19,6 +19,9 @@ import {
   BASE_FISH_SPAWN_INTERVAL,
   MIN_FISH_SPAWN_INTERVAL,
   BOSS_FISH_MAX_HP,
+  WAVE_DURATION_SEC,
+  PLAYER_X,
+  PLAYER_Y,
 } from './Constants';
 
 const Y_MIN = CANVAS_HEIGHT * FISH_Y_MIN_FRAC;
@@ -26,11 +29,58 @@ const Y_MAX = CANVAS_HEIGHT * FISH_Y_MAX_FRAC;
 const Y_SOFT_MIN = Y_MIN - 20;
 const Y_SOFT_MAX = Y_MAX + 20;
 
+/** Off-screen, velocity aimed toward a point near the player (burst “playable” lane). */
+function spawnInwardFromEdge(
+  rng: Rng,
+  targetX: number,
+  targetY: number,
+  speed: number,
+): { x: number; y: number; vx: number; vy: number } {
+  const r = rng.next();
+  let x: number, y: number;
+  if (r < 0.38) {
+    x = -FISH_OFFSCREEN_MARGIN;
+    y = rng.between(
+      Math.max(Y_MIN, targetY - 110),
+      Math.min(Y_MAX, targetY + 110),
+    );
+  } else if (r < 0.76) {
+    x = CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN;
+    y = rng.between(
+      Math.max(Y_MIN, targetY - 110),
+      Math.min(Y_MAX, targetY + 110),
+    );
+  } else if (r < 0.88) {
+    y = Y_MIN - FISH_OFFSCREEN_MARGIN;
+    x = rng.between(
+      Math.max(-FISH_OFFSCREEN_MARGIN, targetX - 100),
+      Math.min(CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN, targetX + 100),
+    );
+  } else {
+    // Below the canvas — Y_MAX is only the fish play band, not the screen bottom
+    y = CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
+    x = rng.between(
+      Math.max(-FISH_OFFSCREEN_MARGIN, targetX - 100),
+      Math.min(CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN, targetX + 100),
+    );
+  }
+  const dx = targetX - x;
+  const dy = targetY - y;
+  const len = Math.hypot(dx, dy) || 1;
+  return { x, y, vx: (dx / len) * speed, vy: (dy / len) * speed };
+}
+
 export function pickFishType(rng: Rng): FishType {
   return rng.weightedIndex(FISH_SPAWN_WEIGHTS) as FishType;
 }
 
-export function spawnFish(id: number, rng: Rng, sessionTime: number): FishState {
+export function spawnFish(
+  id: number,
+  rng: Rng,
+  sessionTime: number,
+  opts?: { spawnInward?: boolean },
+): FishState {
+  const spawnInward = opts?.spawnInward === true;
   const rawType = pickFishType(rng);
   const type = rawType === FishType.Rare && sessionTime < RARE_FISH_MIN_SESSION_TIME
     ? FishType.Medium
@@ -40,12 +90,33 @@ export function spawnFish(id: number, rng: Rng, sessionTime: number): FishState 
   let x: number, y: number, vx: number, vy: number;
 
   if (type === FishType.Jelly) {
-    // Jellyfish: spawn top/bottom, drift vertically with slow horizontal wobble
-    const fromTop = rng.next() < 0.65;
-    x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
-    y = fromTop ? Y_MIN - FISH_OFFSCREEN_MARGIN : CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
-    vx = (rng.next() - 0.5) * speed * 0.25;
-    vy = fromTop ? speed : -speed;
+    if (spawnInward) {
+      const tgx = PLAYER_X + (rng.next() - 0.5) * 90;
+      const tgy = PLAYER_Y + (rng.next() - 0.5) * 100;
+      const fromTop = rng.next() < 0.5;
+      x = Math.max(32, Math.min(CANVAS_WIDTH - 32, tgx + (rng.next() - 0.5) * 70));
+      y = fromTop ? (Y_MIN - FISH_OFFSCREEN_MARGIN) : (CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN);
+      const dx = tgx - x;
+      const dy = tgy - y;
+      const len = Math.hypot(dx, dy) || 1;
+      vx = (dx / len) * speed * 0.32;
+      vy = (dy / len) * speed * 0.42;
+    } else {
+      // Jellyfish: spawn top/bottom, drift vertically with slow horizontal wobble
+      const fromTop = rng.next() < 0.65;
+      x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
+      y = fromTop ? Y_MIN - FISH_OFFSCREEN_MARGIN : CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
+      vx = (rng.next() - 0.5) * speed * 0.25;
+      vy = fromTop ? speed : -speed;
+    }
+  } else if (spawnInward) {
+    const tgx = PLAYER_X + (rng.next() - 0.5) * 100;
+    const tgy = PLAYER_Y + (rng.next() - 0.5) * 100;
+    const inward = spawnInwardFromEdge(rng, tgx, tgy, speed);
+    x = inward.x;
+    y = inward.y;
+    vx = inward.vx;
+    vy = inward.vy;
   } else {
     // All other fish: weighted spawn from any edge (mostly left/right)
     const roll = rng.next();
@@ -71,10 +142,10 @@ export function spawnFish(id: number, rng: Rng, sessionTime: number): FishState 
       vx = Math.cos(ang) * speed;
       vy = Math.sin(ang) * speed;
     } else {
-      // from bottom
+      // from bottom (below play band — was Y_MAX + margin, still on-screen)
       const ang = rng.between(-Math.PI * 0.72, -Math.PI * 0.28);
       x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
-      y = Y_MAX + FISH_OFFSCREEN_MARGIN;
+      y = CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
       vx = Math.cos(ang) * speed;
       vy = Math.sin(ang) * speed;
     }
@@ -198,6 +269,18 @@ export function getFishValue(
 export function getSpawnInterval(sessionTime: number): number {
   const t = Math.min(sessionTime / FISH_SPAWN_TIME_SCALE, 1);
   return BASE_FISH_SPAWN_INTERVAL - t * (BASE_FISH_SPAWN_INTERVAL - MIN_FISH_SPAWN_INTERVAL);
+}
+
+/**
+ * Within each wave, spawn rate tapers: faster at the start, slower near the end of the wave
+ * (pairs with the wave-start burst for “lots early, stragglers late”).
+ */
+export function getModulatedSpawnInterval(sessionTime: number): number {
+  const base = getSpawnInterval(sessionTime);
+  if (WAVE_DURATION_SEC <= 0) return base;
+  const phase = (sessionTime % WAVE_DURATION_SEC) / WAVE_DURATION_SEC;
+  const k = 0.42 + 1.6 * (phase ** 1.1);
+  return base * k;
 }
 
 /** Force-spawn a specific fish type (used for treasure fish). */

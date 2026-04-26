@@ -37,6 +37,7 @@ export interface GameRenderer {
   drawEllipse(color: string, centerX: number, centerY: number, radiusX: number, radiusY: number): void;
   drawEllipseAlpha(color: string, alpha: number, centerX: number, centerY: number, radiusX: number, radiusY: number): void;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
+  drawImageAlpha(image: DrawImageRef, x: number, y: number, width: number, height: number, alpha: number): void;
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void;
 
   // Filled polygon (convex), points are [x0,y0, x1,y1, ...]

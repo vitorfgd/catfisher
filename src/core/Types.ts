@@ -10,12 +10,15 @@ export enum FishType {
   Small  = 0,
   Medium = 1,
   Large  = 2,
+  /** High-value swordfish — uses rare spawn slot */
   Rare   = 3,
   Jelly  = 4,   // jellyfish — drifts vertically, moderate value
   Puffer   = 5,   // pufferfish — adds time to the round when caught
-  Treasure = 6,   // treasure chest — unlocked by Haul lvl 3+, very high value
+  Treasure = 6,   // treasure chest — periodic spawn; very high value; opening cinematic on spear haul-in
   /** Armored "rock" boss: huge hitbox, multi-hit, red screen presence */
   Boss     = 7,
+  /** Steampunk / “metal plate” clownfish */
+  Clown    = 8,
 }
 
 export enum SpearMode {
@@ -25,7 +28,7 @@ export enum SpearMode {
 
 export interface UpgradeState {
   speargun: number; // 1-4  — range + power + reload + reel speed
-  haul:     number; // 1-4  — earnings multiplier; lvl 3+ unlocks treasure fish
+  haul:     number; // 1-4  — earnings multiplier (incl. treasure)
   oxygen:   number; // 1-4  — max dive time
 }
 
@@ -108,7 +111,8 @@ export type GameEvent =
   | { type: 'spearFired' }
   | { type: 'diveStarted' }
   | { type: 'runEnded'; earnings: number; runDurationSec: number }
-  | { type: 'upgradeBought'; id: string };
+  | { type: 'upgradeBought'; id: string }
+  | { type: 'ftueDiveExited' };
 
 export interface FullGameState {
   phase: GamePhase;
@@ -142,6 +146,11 @@ export interface FullGameState {
   nextFishId: number;
   nextSpearId: number;
   fishSpawnTimer: number;
+  /**
+   * Last `floor(sessionTime / WAVE_DURATION_SEC)` for which we fired the wave cluster spawn.
+   * -1 = none yet. Each new wave spawns a burst; continuous spawn tapers to the end of the block.
+   */
+  lastWaveBurstIndex: number;
 
   // Consumable active state (action phase)
   baitActive: boolean;
@@ -161,4 +170,29 @@ export interface FullGameState {
 
   // Event queue (drained each frame by platform layer)
   pendingEvents: GameEvent[];
+
+  /**
+   * First-visit: start underwater with frozen fish; first tap unfreezes + starts the real run
+   * (Reels-style hook; stored completion is in platform, not here).
+   */
+  ftueActive: boolean;
+
+  /** Shown over Action when a spear-caught treasure is paying out (Ridiculous Hook–style). */
+  treasureReveal: TreasureRevealState | null;
+}
+
+/** Spear-delivery only; money applies when the chest opens, not on hook. */
+export interface TreasureRevealState {
+  elapsed: number;
+  opened: boolean;
+  awarded: boolean;
+  value: number; // final dollars including combo; applied once at award time
+  /** Where the hit FX should originate */
+  x: number;
+  y: number;
+  /** Combo line already baked into `value` — for COMBO text at award */
+  comboBonus: number;
+  totalComboForLine: number;
+  durationSec: number;
+  awardAtSec: number;
 }

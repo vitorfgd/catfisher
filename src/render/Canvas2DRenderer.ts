@@ -91,6 +91,15 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.drawImage(img, x, y, width, height);
   }
 
+  drawImageAlpha(image: DrawImageRef, x: number, y: number, width: number, height: number, alpha: number): void {
+    const img = this.images[image.id];
+    if (img == null) return;
+    this.ctx.save();
+    this.ctx.globalAlpha = alpha;
+    this.ctx.drawImage(img, x, y, width, height);
+    this.ctx.restore();
+  }
+
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void {
     this.ctx.save();
     this.ctx.fillStyle = style.color;

@@ -2,12 +2,13 @@
 // Do not import platform code from core/ or render/.
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GAME_ASPECT_RATIO } from './core/Constants';
-import { createInitialState } from './core/GameLogic';
+import { bootstrapActionFtueDive, createInitialState } from './core/GameLogic';
 import { loadImages, BrowserAssetManifest } from './platform/AssetManifest';
 import { BrowserAudioAdapter } from './platform/BrowserAudioAdapter';
 import { BrowserGameLoop } from './platform/BrowserGameLoop';
 import { BrowserInputAdapter } from './platform/BrowserInputAdapter';
 import { Canvas2DRenderer } from './render/Canvas2DRenderer';
+import { isFtueDivePendingInStorage } from './platform/FtueStorage';
 import { runConsistencyChecks } from './shared/ConsistencyChecks';
 
 const container = document.getElementById('game-container');
@@ -75,6 +76,9 @@ async function main(): Promise<void> {
   const input = new BrowserInputAdapter(canvas);
   const audio = new BrowserAudioAdapter();
   const gameState = createInitialState();
+  if (isFtueDivePendingInStorage()) {
+    bootstrapActionFtueDive(gameState);
+  }
 
   const loop = new BrowserGameLoop(gameState, renderer, input, audio);
   loop.start();

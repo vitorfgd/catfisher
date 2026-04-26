@@ -22,6 +22,7 @@ const PARTICLE_COLORS: Record<FishType, string[]> = {
   [FishType.Puffer]: ['#FFD060', '#FF9020', '#ffffff'],
   [FishType.Treasure]: ['#FFD040', '#FFB800', '#ffffff', '#FFF0A0'],
   [FishType.Boss]: ['#c05040', '#8a3a2c', '#e8e0dc', '#ff8060', '#3a2a28'],
+  [FishType.Clown]: ['#f07828', '#e0e8f0', '#8a4a2a', '#f8f0e8', '#ffffff'],
 };
 
 function pushSparkStreaks(

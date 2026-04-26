@@ -5,12 +5,18 @@ export const AssetIds = {
   fishSmall: 'fishSmall',
   fishMedium: 'fishMedium',
   fishLarge: 'fishLarge',
+  /** Swordfish (rare / high value) */
   fishRare: 'fishRare',
   fishJelly: 'fishJelly',
   fishPuffer: 'fishPuffer',
+  /** Closed / slightly cracked chest in-water + on rope */
   fishTreasure: 'fishTreasure',
+  /** Full open frame for the treasure payout cinematic */
+  treasureChestOpen: 'treasureChestOpen',
   /** Armored rock boss */
   fishBoss: 'fishBoss',
+  /** Steampunk clownfish */
+  fishClown: 'fishClown',
   fisherman: 'fisherman',
   bubble: 'bubble',
   underwaterBg: 'underwaterBg',
@@ -39,4 +45,6 @@ export const AssetIds = {
   iconNet: 'iconNet',
   iconBait: 'iconBait',
   iconCoin: 'iconCoin',
+  /** FTUE: finger pointing at fish to tap (points right) */
+  ftueHand: 'ftueHand',
 } as const;

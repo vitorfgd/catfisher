@@ -1,4 +1,4 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, PUFFER_TIME_BONUS } from '../core/Constants';
+import { CANVAS_HEIGHT, CANVAS_WIDTH, PUFFER_TIME_BONUS, WAVE_DURATION_SEC } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
 import {
   HUD_BAIT_BUTTON_CX,
@@ -12,13 +12,11 @@ import { C, t, tb, td } from './theme';
 
 const PLAYER_SPRITE_H = 164;
 
-/** Left-edge wave meter: below top bar, above bottom time strip. */
-const WAVE_METER = {
-  x: 2,
-  w: 4,
-  yTop: 58,
-  yBottom: 800,
-} as const;
+/** Top-left: wave # + clear horizontal progress (fills left→right through the current block). */
+const WAVE_W = 96;
+const WAVE_X = 10;
+const WAVE_Y = 10;
+const WAVE_INNER = 8;
 
 const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {
   net: AssetIds.iconNet,
@@ -59,23 +57,35 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
   renderer.drawImage({ id: AssetIds.iconCoin }, mX + 9, 25, 26, 26);
   renderer.drawText(ms, mX + 40, 12, mW - 48, 52, tb(26, C.gold, 'left'));
 
-  // Wave: vertical progress in current WAVE block (faster ticks — see WAVE_DURATION_SEC in Constants)
-  const wTrackH = WAVE_METER.yBottom - WAVE_METER.yTop;
-  const wFill = wTrackH * Math.max(0, Math.min(1, state.waveProgress));
-  const fillY = WAVE_METER.yBottom - wFill;
-  renderer.drawRectAlpha(C.border, 0.55, WAVE_METER.x, WAVE_METER.yTop, WAVE_METER.w, wTrackH);
-  if (wFill > 0) {
-    renderer.drawRect(C.teal, WAVE_METER.x, fillY, WAVE_METER.w, Math.max(1, wFill));
+  const waveBarY = WAVE_Y + 32;
+  const waveBarH = 9;
+  const waveBarW = WAVE_W - WAVE_INNER * 2;
+  const waveFill = waveBarW * Math.max(0, Math.min(1, state.waveProgress));
+  const waveBarX = WAVE_X + WAVE_INNER;
+  const waveIx = WAVE_X + WAVE_INNER;
+  renderer.drawRoundRectAlpha(C.panel, 0.92, WAVE_X, WAVE_Y, WAVE_W, 54, 10);
+  renderer.drawText('Wave', waveIx, WAVE_Y + 4, 40, 18, t(12, C.muted, 'left', '700'));
+  renderer.drawText(
+    String(state.waveIndex),
+    WAVE_W + WAVE_X - WAVE_INNER - 26,
+    WAVE_Y + 1,
+    24,
+    30,
+    tb(22, C.teal, 'right', { useLayoutMaxWidth: false }),
+  );
+  renderer.drawRoundRect(C.border, waveBarX - 1, waveBarY - 1, waveBarW + 2, waveBarH + 2, 5);
+  renderer.drawRoundRectAlpha(C.bg, 0.9, waveBarX, waveBarY, waveBarW, waveBarH, 4);
+  if (waveFill > 0) {
+    renderer.drawRoundRect(C.teal, waveBarX, waveBarY, Math.max(3, waveFill), waveBarH, 4);
   }
   renderer.drawText(
-    `W${state.waveIndex}`,
-    WAVE_METER.x + 8,
-    WAVE_METER.yTop - 2,
-    32,
-    20,
-    t(12, C.muted, 'left', '700'),
+    `per ${WAVE_DURATION_SEC}s segment`,
+    waveBarX,
+    waveBarY + waveBarH + 1,
+    waveBarW,
+    11,
+    t(7, C.muted, 'right', '500'),
   );
-
   const btns: Array<{ id: 'bait' | 'net'; cx: number; stock: number }> = [
     { id: 'bait', cx: HUD_BAIT_BUTTON_CX, stock: state.consumables.bait },
     { id: 'net', cx: HUD_NET_BUTTON_CX, stock: state.consumables.net },

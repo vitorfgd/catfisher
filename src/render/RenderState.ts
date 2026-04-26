@@ -35,6 +35,9 @@ export interface RenderFishState {
 export interface RenderState {
   phase: GamePhase;
 
+  /** First-dive Reels-style tutorial (frozen fish until first tap) */
+  ftueActive: boolean;
+
   // World
   shakeX: number;
   shakeY: number;
@@ -54,6 +57,8 @@ export interface RenderState {
   /** 0-1, progress through the current wave (for edge meter). */
   waveProgress: number;
   timeElapsed: number;    // seconds since dive started
+  /** Action only — real `sessionTime` (FTUE can keep `timeElapsed` 0; zoom easing uses this). */
+  actionSessionTime: number;
   sessionEarnings: number;
   sessionCatchCount: number;
   harpoonStatus: string;
@@ -86,4 +91,17 @@ export interface RenderState {
   bossScreenTint: number;
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;
+
+  /** Center-screen chest open payout (Ridiculous Hook style); undefined when idle */
+  treasureCinematic?: {
+    progress: number;
+    /** 0-1: full-screen white before prize / chest (Ridiculous Fishing beat) */
+    revealWhiteAlpha: number;
+    opened: boolean;
+    chestScale: number;
+    shake: number;
+    prizeText: string;
+    /** After gold hits the chest, show combo on the same card */
+    comboText?: string;
+  };
 }

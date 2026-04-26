@@ -20,10 +20,15 @@ export const SHOOT_COOLDOWN_REDUCTION = 0.05;
 
 // Fish
 export const FISH_OFFSCREEN_MARGIN = 80;
-export const BASE_FISH_SPAWN_INTERVAL = 1.25;   // first fish on-screen sooner
-export const MIN_FISH_SPAWN_INTERVAL = 0.85;       // cap so screen never floods
+export const BASE_FISH_SPAWN_INTERVAL = 1.55;   // sparser as waves scale (bursts + cap do heavy lifting)
+export const MIN_FISH_SPAWN_INTERVAL = 1.02;   // cap so late waves do not crowd the playfield
 /** Seconds in-dive to reach max spawn rate (replaces old depth-based ramp). */
 export const FISH_SPAWN_TIME_SCALE = 80;
+/** Soft cap: skip passive spawns (not treasure/boss) when this many fish are alive */
+export const FISH_SPAWN_MAX_ALIVE = 13;
+/** Continuous spawn interval multiplier grows with wave (1 = wave 0, +~9% per wave, capped) */
+export const FISH_SPAWN_WAVE_INTERVAL_SCALE_PER_WAVE = 0.09;
+export const FISH_SPAWN_WAVE_INTERVAL_SCALE_CAP = 1.85;
 
 // Dive round timer: upgrade "oxygen" still adds max seconds per run (see UpgradeBalance)
 export const BASE_OXYGEN = 38;
@@ -31,27 +36,44 @@ export const OXYGEN_PER_LEVEL = 7;
 
 /** Difficulty "waves" in HUD: wave = 1 + floor(sessionTime / WAVE_DURATION_SEC). */
 export const WAVE_DURATION_SEC = 8;
+/** New wave: spawn a cluster; ~1/3 off-screen toward player, rest at edges. */
+export const WAVE_BURST_BASE_COUNT = 3;
+/** Extra fish per wave index, capped (prevents late waves from maxing 8+ fish every 8s). */
+export const WAVE_BURST_EXTRA_PER_WAVE = 1;
+export const WAVE_BURST_MAX_COUNT = 5;
+export const WAVE_BURST_EXTRA_CAP = 2; // on top of base, max +2 from wave index
+/** Fraction of a burst that uses off-screen spawns aimed inward (toward player), vs random edges */
+export const WAVE_NEAR_SPAWN_FRACTION = 0.34;
 export const RARE_FISH_MIN_SESSION_TIME = 6;
 
 // Dive transition
 export const DIVE_DURATION = 0.45; // seconds
 
 // Upgrade costs per level (index = target level - 2, so [0] = cost to reach lvl2)
+// Design: ~one meaningful purchase per full dive early on; mid tier needs several dives banked;
+// final tier is a long grind so there is reason to keep playing. (Full max ≈ many × a 3–4k run.)
 export const UPGRADE_COSTS: Record<string, number[]> = {
-  speargun: [20, 48, 95],
-  haul:     [18, 42, 85],
-  oxygen:   [15, 36, 72],
+  speargun: [920, 2800, 9800],
+  haul:     [860, 2500, 8600],
+  oxygen:   [800, 2300, 7800],
 };
 
-// Treasure fish — spawned independently when haul >= 3
+// Treasure fish — spawns on a timer in every dive (independent of haul level)
 export const TREASURE_SPAWN_INTERVAL = 28.0;  // seconds between treasure spawns
-export const HAUL_TREASURE_UNLOCK_LEVEL = 3;
+/** Cinematic when spear-cashed treasure opens (Ridiculous Hook–style). */
+export const TREASURE_REVEAL_DURATION_SEC = 1.35;
+export const TREASURE_REVEAL_AWARD_AT_SEC = 0.58;
+/** White flash: ramp up, then fade before chest reads (Ridiculous Fishing–style beat). */
+export const TREASURE_REVEAL_WHITE_PEAK_SEC = 0.1;
+export const TREASURE_REVEAL_WHITE_FADE_SEC = 0.15;
 export const UPGRADE_MAX_LEVEL = 4;
 
-// Rock boss (spawned on timer, not in random table)
-export const BOSS_SPAWN_INTERVAL = 55.0;
-/** Min seconds in-dive before boss spawns (replaces min-depth gate). */
-export const BOSS_SPAWN_MIN_TIME = 28;
+// Rock boss (spawned on timer, not in random table) — ~first boss 22–32s, then on interval
+export const BOSS_SPAWN_INTERVAL = 50.0;
+/** Min seconds in-dive before a boss is allowed (not in FTUE: timer still runs). */
+export const BOSS_SPAWN_MIN_TIME = 10;
+/** After reset: countdown until first boss check; keep <= BOSS_SPAWN_INTERVAL. */
+export const BOSS_SPAWN_FIRST_DELAY = 20;
 export const BOSS_FISH_MAX_HP = 24;
 /** Spear levels below this deal no damage to the boss (still shows hit feedback) */
 export const BOSS_MIN_SPEAR_LEVEL_TO_DAMAGE = 2;
@@ -64,14 +86,14 @@ export function getBossSpearDamage(speargunLevel: number): number {
   return speargunLevel;
 }
 
-// Fish stats [Small, Medium, Large, Rare, Jelly, Puffer, Treasure, Boss]
-export const FISH_SPEEDS_MIN    = [150,  90, 52,  72, 30,  52,  22,  24];
-export const FISH_SPEEDS_MAX    = [220, 132, 82, 110, 55,  86,  38,  40];
-export const FISH_VALUE_MIN     = [  3,   9, 24,  90, 12,   2, 280,  900];
-export const FISH_VALUE_MAX     = [  6,  16, 40, 150, 22,   8, 520, 1500];
-export const FISH_HITBOX_W      = [ 28,  42, 64,  34, 38,  28,  44, 180];
-export const FISH_HITBOX_H      = [ 18,  24, 36,  30, 38,  28,  36, 150];
-export const FISH_SPAWN_WEIGHTS = [ 48,  23,  7,   2,  9,   8,   0,   0];
+// Fish stats [Small, Medium, Large, Rare (swordfish), Jelly, Puffer, Treasure, Boss, Clown]
+export const FISH_SPEEDS_MIN    = [150,  90, 52,  72, 30,  52,  22,  24,  80];
+export const FISH_SPEEDS_MAX    = [220, 132, 82, 110, 55,  86,  38,  40, 118];
+export const FISH_VALUE_MIN     = [  3,   9, 24,  90, 12,   2, 280,  900,  18];
+export const FISH_VALUE_MAX     = [  6,  16, 40, 150, 22,   8, 520, 1500,  32];
+export const FISH_HITBOX_W      = [ 28,  42, 64,  34, 38,  28,  44, 180,  40];
+export const FISH_HITBOX_H      = [ 18,  24, 36,  30, 38,  28,  36, 150,  24];
+export const FISH_SPAWN_WEIGHTS = [ 46,  22,  6,   2,  8,   8,   0,   0,   3];
 
 // Shark (Large) attack
 export const SHARK_ATTACK_RANGE  = 72;   // px radius from player center
@@ -87,9 +109,9 @@ export const FISH_Y_MIN_FRAC = 0.11;
 export const FISH_Y_MAX_FRAC = 0.62;
 
 // Juice
-export const SHAKE_DECAY = 12;
-export const SHAKE_ON_HOOK = 3.0;
-export const SHAKE_ON_CATCH = 1.8;
+export const SHAKE_DECAY = 28;
+export const SHAKE_ON_HOOK = 2.1;
+export const SHAKE_ON_CATCH = 1.1;
 export const SHAKE_COMBO_SCALE = 0.5;   // multiplier applied to combo shake accumulation
 export const PARTICLE_COUNT_ON_HIT = 12;
 export const PARTICLE_SPEED_MIN = 70;

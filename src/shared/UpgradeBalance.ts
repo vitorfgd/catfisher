@@ -53,7 +53,7 @@ export function getUpgradePreviewStatLines(id: keyof UpgradeState, level: number
     case 'haul':
       return [
         `Earnings ×${getHaulValueMultiplier(clamped).toFixed(2)}`,
-        clamped >= 3 ? '★ Treasure fish unlocked' : 'Treasure fish unlocks at level 3',
+        'Applies to every catch including treasure chests',
       ];
     case 'oxygen':
       return [`Max dive time  ${getOxygenMaxSeconds(clamped)}s`];

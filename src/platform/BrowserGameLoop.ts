@@ -4,6 +4,7 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, update } from '../core/GameLogic';
+import { markFtueDiveCompleteInStorage } from './FtueStorage';
 import type { GameRenderer } from '../render/GameRenderer';
 import { renderFrame } from '../render/RenderFrame';
 import type { BrowserInputAdapter } from './BrowserInputAdapter';
@@ -44,6 +45,10 @@ export class BrowserGameLoop {
     renderFrame(this.renderer, getRenderState(this.state));
 
     for (const event of drainEvents(this.state)) {
+      if (event.type === 'ftueDiveExited') {
+        markFtueDiveCompleteInStorage();
+        continue;
+      }
       this.audio.handleEvent(event);
     }
 

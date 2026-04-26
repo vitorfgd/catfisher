@@ -13,7 +13,9 @@ export type { GameEvent } from './Types';
 import type { GameInputCommand } from '../shared/InputCommands';
 import type { RenderState } from '../render/RenderState';
 
-import { Rng } from './Rng';
+import { getGameRng } from './GameRng';
+import type { Rng } from './Rng';
+import { canvasToActionWorld, getActionViewZoomForSession } from './ActionViewTransform';
 import {
   BAIT_COST,
   BAIT_DURATION,
@@ -21,12 +23,24 @@ import {
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   DIVE_DURATION,
-  HAUL_TREASURE_UNLOCK_LEVEL,
+  TREASURE_REVEAL_AWARD_AT_SEC,
+  TREASURE_REVEAL_DURATION_SEC,
+  TREASURE_REVEAL_WHITE_FADE_SEC,
+  TREASURE_REVEAL_WHITE_PEAK_SEC,
   NET_COST,
   NET_MAX_STOCK,
   PLAYER_X,
   PLAYER_Y,
   PUFFER_TIME_BONUS,
+  WAVE_BURST_BASE_COUNT,
+  WAVE_BURST_EXTRA_PER_WAVE,
+  WAVE_BURST_MAX_COUNT,
+  WAVE_BURST_EXTRA_CAP,
+  WAVE_DURATION_SEC,
+  WAVE_NEAR_SPAWN_FRACTION,
+  FISH_SPAWN_MAX_ALIVE,
+  FISH_SPAWN_WAVE_INTERVAL_SCALE_PER_WAVE,
+  FISH_SPAWN_WAVE_INTERVAL_SCALE_CAP,
   SHAKE_COMBO_SCALE,
   SHAKE_DECAY,
   SHAKE_ON_CATCH,
@@ -38,8 +52,8 @@ import {
   UPGRADE_MAX_LEVEL,
   BOSS_SPAWN_INTERVAL,
   BOSS_SPAWN_MIN_TIME,
-  WAVE_DURATION_SEC,
   BOSS_NET_DAMAGE,
+  BOSS_SPAWN_FIRST_DELAY,
   BOSS_FISH_MAX_HP,
   BOSS_MIN_SPEAR_LEVEL_TO_DAMAGE,
   getBossSpearDamage,
@@ -59,7 +73,7 @@ import {
 } from './UpgradeSystem';
 import {
   getFishValue,
-  getSpawnInterval,
+  getModulatedSpawnInterval,
   removeDespawnedFish,
   spawnFish,
   spawnBossFish,
@@ -84,7 +98,65 @@ import {
   updateParticles,
 } from './ParticleSystem';
 
-const rng = new Rng();
+/**
+ * Reels-style first dive: a few on-screen, motionless fish. Positioned so all stay in frame
+ * with FTUE zoom; [0] = hand + tap target.
+ */
+const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
+  { x: 155, y: 272, type: FishType.Small },
+  { x: 255, y: 218, type: FishType.Small },
+  { x: 340, y: 268, type: FishType.Medium },
+];
+
+/**
+ * Insta-hook FTUE: jump straight to Action, frozen fish, timer paused until first tap.
+ * Caller should only run when local / platform says first visit.
+ */
+export function bootstrapActionFtueDive(state: FullGameState): void {
+  state.ftueActive = true;
+  state.phase = GamePhase.Action;
+  state.diveTimer = DIVE_DURATION;
+  resetForNewDive(state);
+  state.fish = [];
+  let id = state.nextFishId;
+  for (const row of FTUE_SHOWCASE_FISH) {
+    state.fish.push({
+      id: id++,
+      x: row.x,
+      y: row.y,
+      vx: 0,
+      vy: 0,
+      wanderTimer: 9999,
+      age: 0,
+      hasAttacked: false,
+      type: row.type,
+      alive: true,
+      hitFlash: 0,
+    });
+  }
+  state.nextFishId = id;
+  state.fishSpawnTimer = 8_000_000_000_000;
+  state.treasureSpawnTimer = 8_000_000_000_000;
+  state.bossSpawnTimer = 8_000_000_000_000;
+  state.pendingEvents.push({ type: 'diveStarted' });
+}
+
+function exitFtueDiveState(state: FullGameState): void {
+  if (!state.ftueActive) return;
+  const rng = getGameRng();
+  state.ftueActive = false;
+  state.fishSpawnTimer = 0.1;
+  state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
+  state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
+  for (const f of state.fish) {
+    if (!f.alive) continue;
+    const dir = rng.next() < 0.5 ? 1 : -1;
+    f.vx = dir * rng.between(120, 200);
+    f.vy = rng.between(-50, 50);
+    f.wanderTimer = rng.between(1.4, 2.2);
+  }
+  state.pendingEvents.push({ type: 'ftueDiveExited' });
+}
 
 export function createInitialState(): FullGameState {
   const upgrades: UpgradeState = { speargun: 1, haul: 1, oxygen: 1 };
@@ -95,6 +167,7 @@ export function createInitialState(): FullGameState {
     money: 0,
     upgrades,
     consumables,
+    ftueActive: false,
     player: { x: PLAYER_X, y: PLAYER_Y, aimAngle: -Math.PI / 2, shootCooldown: 0 },
     spears: [],
     fish: [],
@@ -110,12 +183,14 @@ export function createInitialState(): FullGameState {
     oxyBoostTimer: 0,
     upgradePanelOpen: null,
     treasureSpawnTimer: TREASURE_SPAWN_INTERVAL,
-    bossSpawnTimer: BOSS_SPAWN_INTERVAL,
+    bossSpawnTimer: BOSS_SPAWN_FIRST_DELAY,
     lastRunEarnings: 0,
     lastRunDurationSec: 0,
     lastRunCatchCount: 0,
+    treasureReveal: null,
     nextFishId: 1,
     nextSpearId: 1,
+    lastWaveBurstIndex: -1,
     fishSpawnTimer: 0,
     baitActive: false,
     baitTimer: 0,
@@ -150,11 +225,13 @@ function resetForNewDive(state: FullGameState): void {
   state.baitActive = false;
   state.baitTimer = 0;
   state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
-  state.bossSpawnTimer = BOSS_SPAWN_INTERVAL;
+  state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
+  state.lastWaveBurstIndex = -1;
   state.shakeIntensity = 0;
   state.shakeX = 0;
   state.shakeY = 0;
   state.catchFlash = 0;
+  state.treasureReveal = null;
 }
 
 function finishRun(state: FullGameState): void {
@@ -173,6 +250,7 @@ function finishRun(state: FullGameState): void {
   state.shakeX = 0;
   state.shakeY = 0;
   state.catchFlash = 0;
+  state.treasureReveal = null;
   state.pendingEvents.push({
     type: 'runEnded',
     earnings: state.sessionEarnings,
@@ -224,6 +302,42 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
   }
 }
 
+function updateTreasureReveal(state: FullGameState, dt: number, r: Rng): void {
+  const tr = state.treasureReveal;
+  if (tr == null) return;
+  tr.elapsed += dt;
+  if (!tr.opened && tr.elapsed >= tr.awardAtSec * 0.9) {
+    tr.opened = true;
+  }
+  if (!tr.awarded && tr.elapsed >= tr.awardAtSec) {
+    tr.awarded = true;
+    const totalReward = tr.value;
+    state.money += totalReward;
+    state.sessionEarnings += totalReward;
+    state.sessionCatchCount += 1;
+    // Particles in center so they read above the dimmed playfield; prize text is on the treasure overlay
+    const cx = CANVAS_WIDTH * 0.5;
+    const cy = CANVAS_HEIGHT * 0.48;
+    emitCatchPayoffFX(state.particles, cx, cy, FishType.Treasure, totalReward, r);
+    state.catchFlash = Math.max(
+      state.catchFlash,
+      Math.min(CATCH_FLASH_CAP, 0.04 + Math.min(0.15, totalReward / 400 * 0.095)),
+    );
+    const comboShakeScale = tr.totalComboForLine > 1 ? SHAKE_COMBO_SCALE : 1;
+    state.shakeIntensity += SHAKE_ON_CATCH * comboShakeScale;
+    state.pendingEvents.push({
+      type: 'fishCaught',
+      x: tr.x,
+      y: tr.y,
+      value: totalReward,
+      fishType: FishType.Treasure,
+    });
+  }
+  if (tr.elapsed >= tr.durationSec) {
+    state.treasureReveal = null;
+  }
+}
+
 function updateDiving(state: FullGameState, dt: number): void {
   state.diveTimer += dt;
   if (state.diveTimer >= DIVE_DURATION) {
@@ -233,8 +347,36 @@ function updateDiving(state: FullGameState, dt: number): void {
 }
 
 function updateAction(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
+  const rng = getGameRng();
   if (state.catchFlash > 0) {
     state.catchFlash = Math.max(0, state.catchFlash - CATCH_FLASH_DECAY * dt);
+  }
+
+  if (state.ftueActive) {
+    for (const c of commands) {
+      if (c.type === 'useConsumable') {
+        return;
+      }
+    }
+  }
+
+  if (state.ftueActive) {
+    for (const c of commands) {
+      if (c.type === 'tap') {
+        exitFtueDiveState(state);
+        break;
+      }
+    }
+    if (state.ftueActive) {
+      return;
+    }
+  }
+
+  if (state.treasureReveal) {
+    updateTreasureReveal(state, dt, rng);
+    if (state.treasureReveal) {
+      return;
+    }
   }
 
   const canShoot = state.player.shootCooldown <= 0 && state.spears.length === 0;
@@ -320,8 +462,17 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
     if (command.type !== 'tap') continue;
 
-    const dx = command.x - state.player.x;
-    const dy = command.y - state.player.y;
+    const w = canvasToActionWorld(
+      command.x,
+      command.y,
+      state.shakeX,
+      state.shakeY,
+      state.player.x,
+      state.player.y,
+      getActionViewZoomForSession(state.sessionTime, state.ftueActive),
+    );
+    const dx = w.x - state.player.x;
+    const dy = w.y - state.player.y;
     if (dx !== 0 || dy !== 0) {
       state.player.aimAngle = Math.atan2(dy, dx);
     }
@@ -359,31 +510,68 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   state.sessionTime += dt;
   state.roundTimeLeft = Math.max(0, state.roundTimeLeft - dt);
 
+  // Wave N: start-of-wave cluster; extra from wave is capped, total respects max alive
+  if (WAVE_DURATION_SEC > 0) {
+    const waveBlock = Math.floor(state.sessionTime / WAVE_DURATION_SEC);
+    if (waveBlock > state.lastWaveBurstIndex) {
+      const liveNow = state.fish.filter((f) => f.alive).length;
+      const room = Math.max(0, FISH_SPAWN_MAX_ALIVE - liveNow);
+      const extra = Math.min(
+        WAVE_BURST_EXTRA_CAP,
+        WAVE_BURST_EXTRA_PER_WAVE * Math.max(0, waveBlock),
+      );
+      let n = Math.min(
+        WAVE_BURST_MAX_COUNT,
+        WAVE_BURST_BASE_COUNT + extra,
+      );
+      n = Math.min(n, room);
+      if (n > 0) {
+        const nearN =
+          n <= 1
+            ? 0
+            : Math.min(n, Math.max(1, Math.round(n * WAVE_NEAR_SPAWN_FRACTION)));
+        for (let u = 0; u < nearN; u += 1) {
+          state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, { spawnInward: true }));
+        }
+        for (let v = 0; v < n - nearN; v += 1) {
+          state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, { spawnInward: false }));
+        }
+      }
+      state.lastWaveBurstIndex = waveBlock;
+    }
+  }
+
+  const waveIdx = WAVE_DURATION_SEC > 0 ? Math.floor(state.sessionTime / WAVE_DURATION_SEC) : 0;
+  const waveIntScale = Math.min(
+    FISH_SPAWN_WAVE_INTERVAL_SCALE_CAP,
+    1 + waveIdx * FISH_SPAWN_WAVE_INTERVAL_SCALE_PER_WAVE,
+  );
+
   state.fishSpawnTimer -= dt;
   if (state.fishSpawnTimer <= 0) {
-    state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime));
-    state.fishSpawnTimer = getSpawnInterval(state.sessionTime);
+    const liveFish = state.fish.filter((f) => f.alive).length;
+    if (liveFish < FISH_SPAWN_MAX_ALIVE) {
+      state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime));
+    }
+    state.fishSpawnTimer = getModulatedSpawnInterval(state.sessionTime) * waveIntScale;
   }
 
-  // Treasure fish — spawned on a separate timer when haul >= unlock level
-  if (state.upgrades.haul >= HAUL_TREASURE_UNLOCK_LEVEL) {
-    state.treasureSpawnTimer -= dt;
-    if (state.treasureSpawnTimer <= 0) {
-      state.fish.push(spawnFishOfType(state.nextFishId++, rng, FishType.Treasure));
-      state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
-    }
+  // Treasure fish — periodic spawn, every wave / dive
+  state.treasureSpawnTimer -= dt;
+  if (state.treasureSpawnTimer <= 0) {
+    state.fish.push(spawnFishOfType(state.nextFishId++, rng, FishType.Treasure));
+    state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
   }
 
-  // Rock boss — timer spawn, not in random table; at most one alive at a time
-  if (state.sessionTime >= BOSS_SPAWN_MIN_TIME) {
-    state.bossSpawnTimer -= dt;
-    if (
-      state.bossSpawnTimer <= 0 &&
-      !state.fish.some((f) => f.type === FishType.Boss && f.alive)
-    ) {
-      state.fish.push(spawnBossFish(state.nextFishId++, rng));
-      state.bossSpawnTimer = BOSS_SPAWN_INTERVAL;
-    }
+  // Rock boss — timer always runs; only spawns once min time + first delay / interval (was stuck before 28s)
+  state.bossSpawnTimer -= dt;
+  if (
+    state.sessionTime >= BOSS_SPAWN_MIN_TIME
+    && state.bossSpawnTimer <= 0
+    && !state.fish.some((f) => f.type === FishType.Boss && f.alive)
+  ) {
+    state.fish.push(spawnBossFish(state.nextFishId++, rng));
+    state.bossSpawnTimer = BOSS_SPAWN_INTERVAL;
   }
 
   // Bait timer
@@ -514,6 +702,22 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       : 0;
     const totalReward = catchResult.value + comboBonus;
 
+    if (catchResult.fishType === FishType.Treasure) {
+      state.treasureReveal = {
+        elapsed: 0,
+        opened: false,
+        awarded: false,
+        value: totalReward,
+        x: catchResult.x,
+        y: catchResult.y,
+        comboBonus,
+        totalComboForLine: state.comboCount,
+        durationSec: TREASURE_REVEAL_DURATION_SEC,
+        awardAtSec: TREASURE_REVEAL_AWARD_AT_SEC,
+      };
+      continue;
+    }
+
     state.money += totalReward;
     state.sessionEarnings += totalReward;
     state.sessionCatchCount += 1;
@@ -573,11 +777,6 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   state.floatingTexts = updateFloatingTexts(state.floatingTexts, dt);
 
   state.shakeIntensity = Math.max(0, state.shakeIntensity - SHAKE_DECAY * dt);
-  // Subtle persistent shake while combo is alive — scales gently with streak
-  if (state.comboTimer > 0 && state.comboCount > 1) {
-    const comboFloor = Math.min(0.4 + state.comboCount * 0.15, 2.0);
-    state.shakeIntensity = Math.max(state.shakeIntensity, comboFloor);
-  }
   state.shakeX = state.shakeIntensity > 0 ? (rng.next() - 0.5) * state.shakeIntensity : 0;
   state.shakeY = state.shakeIntensity > 0 ? (rng.next() - 0.5) * state.shakeIntensity : 0;
 
@@ -609,8 +808,10 @@ export function getRenderState(state: FullGameState): RenderState {
     ? (carryingFish ? 'HAUL' : 'REEL')
     : (state.player.shootCooldown <= 0 ? 'READY' : 'LOAD');
 
+  const ftue = state.ftueActive;
   return {
     phase: state.phase,
+    ftueActive: ftue,
     shakeX: state.shakeX,
     shakeY: state.shakeY,
     player: {
@@ -651,14 +852,21 @@ export function getRenderState(state: FullGameState): RenderState {
     particles: [...state.particles],
     floatingTexts: [...state.floatingTexts],
     money: state.money,
-    timeLeftFraction: state.roundTimeMax > 0 ? state.roundTimeLeft / state.roundTimeMax : 0,
-    roundTimeLeft: state.roundTimeLeft,
+    timeLeftFraction: ftue
+      ? 1
+      : state.roundTimeMax > 0
+        ? state.roundTimeLeft / state.roundTimeMax
+        : 0,
+    roundTimeLeft: ftue ? state.roundTimeMax : state.roundTimeLeft,
     roundTimeMax: state.roundTimeMax,
-    waveIndex: 1 + Math.floor(state.sessionTime / WAVE_DURATION_SEC),
-    waveProgress: WAVE_DURATION_SEC > 0
-      ? (state.sessionTime % WAVE_DURATION_SEC) / WAVE_DURATION_SEC
-      : 0,
-    timeElapsed: state.sessionTime,
+    waveIndex: ftue ? 1 : 1 + Math.floor(state.sessionTime / WAVE_DURATION_SEC),
+    waveProgress: ftue
+      ? 0
+      : WAVE_DURATION_SEC > 0
+        ? (state.sessionTime % WAVE_DURATION_SEC) / WAVE_DURATION_SEC
+        : 0,
+    timeElapsed: ftue ? 0 : state.sessionTime,
+    actionSessionTime: state.phase === GamePhase.Action ? state.sessionTime : 0,
     sessionEarnings: state.sessionEarnings,
     sessionCatchCount: state.sessionCatchCount,
     harpoonStatus,
@@ -685,8 +893,47 @@ export function getRenderState(state: FullGameState): RenderState {
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
-    bossScreenTint: state.fish.some((f) => f.type === FishType.Boss && f.alive) ? 0.28 : 0,
+    bossScreenTint: state.fish.some((f) => f.type === FishType.Boss && f.alive) ? 0.24 : 0,
     catchFlash: state.catchFlash,
+    treasureCinematic: (() => {
+      const tr = state.treasureReveal;
+      if (tr == null) return undefined;
+      const p = Math.min(1, tr.elapsed / tr.durationSec);
+      const el = tr.elapsed;
+      const peak = TREASURE_REVEAL_WHITE_PEAK_SEC;
+      const fade = TREASURE_REVEAL_WHITE_FADE_SEC;
+      let revealWhiteAlpha = 0;
+      if (el < peak) {
+        revealWhiteAlpha = peak > 0 ? el / peak : 0;
+      } else if (el < peak + fade) {
+        const u = (el - peak) / (fade > 0 ? fade : 1e-6);
+        revealWhiteAlpha = Math.max(0, 1 - u);
+      } else {
+        revealWhiteAlpha = 0;
+      }
+      return {
+        progress: p,
+        revealWhiteAlpha,
+        opened: tr.opened,
+        chestScale:
+          0.9
+          + Math.min(1, tr.elapsed / 0.4) * 0.1
+          + (tr.opened ? 0.08 : 0),
+        /** Subtle wobble only; halos removed from overlay. */
+        shake: tr.opened
+          ? Math.max(
+            0,
+            1
+              - (tr.elapsed - tr.awardAtSec)
+                / Math.max(0.001, tr.durationSec - tr.awardAtSec),
+          ) * 0.04
+          : (1 - Math.min(1, tr.elapsed / tr.awardAtSec)) * 0.08,
+        prizeText: `+$${tr.value}`,
+        comboText: tr.awarded && tr.comboBonus > 0
+          ? `x${tr.totalComboForLine} COMBO`
+          : undefined,
+      };
+    })(),
   };
 }
 

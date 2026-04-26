@@ -5,12 +5,18 @@
   "scripts": {
     "dev": "vite",
     "typecheck": "tsc --noEmit",
-    "check:consistency": "tsc --noEmit",
-    "build": "tsc && vite build",
+    "check:ts": "tsc --noEmit",
+    "check:invariants": "tsx scripts/check-invariants.ts",
+    "check": "npm run check:ts && npm run check:invariants",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "build": "tsc -p tsconfig.build.json && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
+    "tsx": "^4.19.0",
     "typescript": "^5.4.5",
-    "vite": "^5.2.11"
+    "vite": "^5.2.11",
+    "vitest": "^2.1.0"
   }
 }
