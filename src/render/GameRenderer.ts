@@ -15,6 +15,11 @@ export interface TextStyle {
   strokeWidth?: number;
   shadowColor?: string;
   shadowBlur?: number;
+  /**
+   * When true (default), canvas fits text to the layout width (can squash glyphs).
+   * Set false for short fixed labels on narrow cards so text draws at natural width.
+   */
+  useLayoutMaxWidth?: boolean;
 }
 
 export interface GameRenderer {

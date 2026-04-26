@@ -655,6 +655,9 @@ export function getRenderState(state: FullGameState): RenderState {
     roundTimeLeft: state.roundTimeLeft,
     roundTimeMax: state.roundTimeMax,
     waveIndex: 1 + Math.floor(state.sessionTime / WAVE_DURATION_SEC),
+    waveProgress: WAVE_DURATION_SEC > 0
+      ? (state.sessionTime % WAVE_DURATION_SEC) / WAVE_DURATION_SEC
+      : 0,
     timeElapsed: state.sessionTime,
     sessionEarnings: state.sessionEarnings,
     sessionCatchCount: state.sessionCatchCount,

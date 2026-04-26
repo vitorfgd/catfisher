@@ -20,19 +20,18 @@ export const SHOOT_COOLDOWN_REDUCTION = 0.05;
 
 // Fish
 export const FISH_OFFSCREEN_MARGIN = 80;
-export const BASE_FISH_SPAWN_INTERVAL = 2.4;      // gentler opening pace
+export const BASE_FISH_SPAWN_INTERVAL = 1.25;   // first fish on-screen sooner
 export const MIN_FISH_SPAWN_INTERVAL = 0.85;       // cap so screen never floods
 /** Seconds in-dive to reach max spawn rate (replaces old depth-based ramp). */
 export const FISH_SPAWN_TIME_SCALE = 80;
 
 // Dive round timer: upgrade "oxygen" still adds max seconds per run (see UpgradeBalance)
-export const BASE_OXYGEN = 30;
+export const BASE_OXYGEN = 38;
 export const OXYGEN_PER_LEVEL = 7;
 
 /** Difficulty "waves" in HUD: wave = 1 + floor(sessionTime / WAVE_DURATION_SEC). */
-export const WAVE_DURATION_SEC = 20;
-/** Rare fish only after the run has been going this long (seconds). */
-export const RARE_FISH_MIN_SESSION_TIME = 12;
+export const WAVE_DURATION_SEC = 8;
+export const RARE_FISH_MIN_SESSION_TIME = 6;
 
 // Dive transition
 export const DIVE_DURATION = 0.45; // seconds
@@ -104,24 +103,49 @@ export const FLOATING_TEXT_LIFE = 0.9;
 export const CATCH_FLASH_DECAY = 2.6;
 export const CATCH_FLASH_CAP = 0.2;
 
-// Boat screen — layout anchors kept in sync with BrowserInputAdapter hit-tests
-export const UPGRADE_BUTTON_W = 440;          // full-width upgrade button (CANVAS_WIDTH - 2*MARGIN)
-export const UPGRADE_BUTTON_H = 88;           // single-column button height
-export const UPGRADE_BUTTON_GAP = 10;         // gap between upgrade buttons
-export const UPGRADE_MARGIN = 20;             // left/right margin
-export const UPGRADE_BUTTONS_TOP = 360;       // first upgrade button (y)
-// Upgrade detail panel (full-screen overlay shown when a button is tapped)
+// Boat screen — outer margin + BOAT_SHEET_PAD insets the scroll column inside the deck
+// (prevents rows from sitting flush to the deck edge). Hit-tests use the same values.
+export const UPGRADE_MARGIN = 20;
+export const BOAT_SHEET_PAD = 14;
+export const UPGRADE_BUTTON_W = CANVAS_WIDTH - 2 * UPGRADE_MARGIN - 2 * BOAT_SHEET_PAD;
+export const UPGRADE_BUTTON_H = 88;
+export const UPGRADE_BUTTON_GAP = 10;
+export const UPGRADE_BUTTONS_TOP = 350;
+/** Bottom Y of the last upgrade row (exclusive of margin below the row). */
+export const UPGRADE_LAST_ROW_BOTTOM =
+  UPGRADE_BUTTONS_TOP + 3 * UPGRADE_BUTTON_H + 2 * UPGRADE_BUTTON_GAP;
+/**
+ * GEAR section header block height: drawSectionHeader (label + rule line) — must match boatScreen.
+ */
+export const GEAR_SECTION_HEADER_H = 23;
+/** Space from last upgrade row to GEAR title (aligns with UPGRADES spacing feel). */
+export const MARGIN_UPGRADES_TO_GEAR = 14;
+/** Space from GEAR header rule to top of consumable cards. */
+export const MARGIN_GEAR_TO_CONSUMABLE = 5;
+export const GEAR_HEADER_LABEL_Y = UPGRADE_LAST_ROW_BOTTOM + MARGIN_UPGRADES_TO_GEAR;
+export const CONSUMABLE_H = 88;
+export const CONSUMABLE_GAP = 12;
+export const CONSUMABLE_W = Math.floor((UPGRADE_BUTTON_W - CONSUMABLE_GAP) / 2);
+export const CONSUMABLE_Y =
+  GEAR_HEADER_LABEL_Y + GEAR_SECTION_HEADER_H + MARGIN_GEAR_TO_CONSUMABLE;
+// Upgrade detail panel (full-screen overlay when a button is tapped)
 export const UPGRADE_PANEL_BUY_Y = CANVAS_HEIGHT - 120;    // buy button anchored to bottom (= 734)
 export const UPGRADE_PANEL_BUY_H = 60;
-// Consumables
-export const CONSUMABLE_Y = 684;              // top of consumable cards
-export const CONSUMABLE_H = 70;              // consumable card height
-export const CONSUMABLE_W = 215;             // same width as consumable buttons
-export const CONSUMABLE_GAP = 10;            // gap between the two cards
+export const DIVE_BUTTON_GAP = 20;
+export const BOAT_DECK_TOP_PAD = 20; // PANEL top → UPGRADES label; keep equal to DIVE_BUTTON_GAP
+/** Padding below DIVE inside the deck shell (visual breathing room). */
+export const BOAT_SHELL_BELOW_DIVE = 18;
+/**
+ * Max Y for the bottom of the main-menu deck shell. Must be the canvas bottom: if this
+ * is less than DIVE + BOAT_SHELL_BELOW_DIVE, the shell is clipped and the under-DIVE margin collapses.
+ */
+export const BOAT_SHELL_MAX_BOTTOM = CANVAS_HEIGHT;
+/** Min gap from other full-screen UIs to canvas edge; do not use to cap the boat shell (see BOAT_SHELL_MAX_BOTTOM). */
+export const BOAT_SCREEN_EDGE = 10;
+export const DIVE_BUTTON_Y = CONSUMABLE_Y + CONSUMABLE_H + DIVE_BUTTON_GAP;
+export const DIVE_BUTTON_HEIGHT = 52;         // large tap target
 export const NET_COST = 30;
 export const BAIT_COST = 45;
 export const NET_MAX_STOCK = 3;
 export const BAIT_MAX_STOCK = 3;
 export const BAIT_DURATION = 6.0;            // seconds bait remains active
-export const DIVE_BUTTON_Y = 790;            // DIVE button top
-export const DIVE_BUTTON_HEIGHT = 46;

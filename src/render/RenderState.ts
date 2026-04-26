@@ -51,6 +51,8 @@ export interface RenderState {
   roundTimeMax: number;
   /** 1-based; advances every WAVE_DURATION_SEC in-dive. */
   waveIndex: number;
+  /** 0-1, progress through the current wave (for edge meter). */
+  waveProgress: number;
   timeElapsed: number;    // seconds since dive started
   sessionEarnings: number;
   sessionCatchCount: number;

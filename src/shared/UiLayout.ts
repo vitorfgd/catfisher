@@ -1,4 +1,5 @@
 import {
+  BOAT_SHEET_PAD,
   CANVAS_WIDTH,
   CONSUMABLE_GAP,
   CONSUMABLE_H,
@@ -25,7 +26,7 @@ export const HUD_NET_BUTTON_CX = CANVAS_WIDTH - 99;
 
 export function getUpgradeButtonRect(index: number): { x: number; y: number; w: number; h: number } {
   return {
-    x: UPGRADE_MARGIN,
+    x: UPGRADE_MARGIN + BOAT_SHEET_PAD,
     y: UPGRADE_BUTTONS_TOP + index * (UPGRADE_BUTTON_H + UPGRADE_BUTTON_GAP),
     w: UPGRADE_BUTTON_W,
     h: UPGRADE_BUTTON_H,
@@ -43,21 +44,25 @@ export function getUpgradeKeyByPoint(lx: number, ly: number): keyof UpgradeState
 export function isUpgradePanelBuyButton(lx: number, ly: number): boolean {
   return (
     lx >= UPGRADE_MARGIN &&
-    lx <= UPGRADE_MARGIN + UPGRADE_BUTTON_W &&
+    lx <= CANVAS_WIDTH - UPGRADE_MARGIN &&
     ly >= UPGRADE_PANEL_BUY_Y &&
     ly <= UPGRADE_PANEL_BUY_Y + UPGRADE_PANEL_BUY_H
   );
 }
 
 export function isDiveButton(lx: number, ly: number): boolean {
-  const x = UPGRADE_MARGIN;
-  const width = CANVAS_WIDTH - UPGRADE_MARGIN * 2;
-  return lx >= x && lx <= x + width && ly >= DIVE_BUTTON_Y && ly <= DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT;
+  const x = UPGRADE_MARGIN + BOAT_SHEET_PAD;
+  return (
+    lx >= x
+    && lx <= x + UPGRADE_BUTTON_W
+    && ly >= DIVE_BUTTON_Y
+    && ly <= DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT
+  );
 }
 
 export function getBoatConsumableBuyHit(lx: number, ly: number): 'net' | 'bait' | null {
-  const netX = UPGRADE_MARGIN;
-  const baitX = UPGRADE_MARGIN + CONSUMABLE_W + CONSUMABLE_GAP;
+  const netX = UPGRADE_MARGIN + BOAT_SHEET_PAD;
+  const baitX = netX + CONSUMABLE_W + CONSUMABLE_GAP;
   if (ly < CONSUMABLE_Y || ly > CONSUMABLE_Y + CONSUMABLE_H) return null;
   if (lx >= netX && lx <= netX + CONSUMABLE_W) return 'net';
   if (lx >= baitX && lx <= baitX + CONSUMABLE_W) return 'bait';

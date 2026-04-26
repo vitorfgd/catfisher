@@ -4,16 +4,22 @@ import type { UpgradeState } from '../core/Types';
 import {
   BAIT_COST,
   BAIT_MAX_STOCK,
+  BOAT_DECK_TOP_PAD,
+  BOAT_SHELL_BELOW_DIVE,
+  BOAT_SHELL_MAX_BOTTOM,
+  BOAT_SHEET_PAD,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   CONSUMABLE_GAP,
   CONSUMABLE_H,
   CONSUMABLE_W,
   CONSUMABLE_Y,
+  GEAR_HEADER_LABEL_Y,
   DIVE_BUTTON_HEIGHT,
   DIVE_BUTTON_Y,
   NET_COST,
   NET_MAX_STOCK,
+  UPGRADE_BUTTON_W,
   UPGRADE_MARGIN,
   UPGRADE_MAX_LEVEL,
   UPGRADE_PANEL_BUY_H,
@@ -21,8 +27,9 @@ import {
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
-import { C, t, tb, td } from './theme';
+import { Boat, C, t, tb, td } from './theme';
 import {
+  CONSUMABLE_LINES,
   getUpgradeStatLines,
   UPGRADE_LABELS,
   UPGRADE_LEVEL_NAMES,
@@ -49,32 +56,38 @@ function drawUpgradeButton(
   const maxed = level >= UPGRADE_MAX_LEVEL;
   const accent = maxed ? C.gold : C.teal;
   const dim = !canAfford && !maxed && !isOpen;
-  const nameC = dim ? C.muted : C.white;
+  const nameC = dim ? Boat.labelMuted : Boat.labelBright;
 
-  renderer.drawRoundRectAlpha(C.bg, 0.94, x, y, width, height, 12);
-  if (isOpen) renderer.drawRoundRectAlpha(C.teal, 0.10, x, y, width, height, 12);
+  renderer.drawRoundRectAlpha(Boat.card, 0.98, x, y, width, height, 14);
+  if (isOpen) renderer.drawRoundRectAlpha(Boat.cardOpen, 0.9, x, y, width, height, 14);
+  if (!isOpen) renderer.drawRoundRectAlpha(C.teal, 0.06, x + 1, y + 1, width - 2, height - 2, 13);
 
   const iconZone = height;
-  const iconPad = 7;
+  const iconPad = 8;
   const iconSz = iconZone - iconPad * 2;
   const sprite = UPGRADE_LEVEL_SPRITES[id][level - 1];
-  renderer.drawRoundRectAlpha(accent, dim ? 0.10 : 0.18, x + 2, y + 2, iconZone - 4, height - 4, 10);
+  renderer.drawRoundRectAlpha(accent, dim ? 0.10 : 0.22, x + 2, y + 2, iconZone - 4, height - 4, 12);
   renderer.drawImage({ id: sprite }, x + iconPad, y + iconPad, iconSz, iconSz);
 
-  renderer.drawRectAlpha(C.border, 0.9, x + iconZone + 2, y + 8, 1, height - 16);
+  renderer.drawRectAlpha(Boat.cardLine, 0.9, x + iconZone + 2, y + 10, 1, height - 20);
 
   const infoX = x + iconZone + 14;
   const infoW = width - iconZone - 80;
-  renderer.drawText(UPGRADE_LABELS[id], infoX, y + 9, infoW, 18, t(12, C.muted, 'left', '600'));
-  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 26, infoW, 26, t(17, nameC, 'left', '800'));
+  renderer.drawText(UPGRADE_LABELS[id], infoX, y + 10, infoW, 20, t(14, Boat.labelMuted, 'left', '600'));
+  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 30, infoW, 32, t(19, nameC, 'left', '800'));
 
+  const pipY = y + 68;
+  const pipR = 6;
+  const pip0 = infoX + pipR;
+  const pipGap = 16;
   for (let i = 0; i < UPGRADE_MAX_LEVEL; i += 1) {
-    renderer.drawEllipse(i < level ? accent : C.border, infoX + 2 + i * 14, y + 62, 5, 5);
+    const cx = pip0 + i * pipGap;
+    renderer.drawEllipse(i < level ? accent : Boat.pipEmpty, cx, pipY, pipR, pipR);
   }
 
   const costLabel = maxed ? 'MAX' : `$${cost}`;
   const costColor = maxed ? C.gold : canAfford ? C.teal : C.muted;
-  renderer.drawText(costLabel, x + width - 56, y + 28, 50, 28, tb(17, costColor, 'right'));
+  renderer.drawText(costLabel, x + width - 58, y + 30, 52, 30, tb(19, costColor, 'right'));
 }
 
 function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof UpgradeState): void {
@@ -87,11 +100,11 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   const W = CANVAS_WIDTH;
   const H = CANVAS_HEIGHT;
 
-  renderer.drawRectAlpha(C.bg, 0.92, 0, 0, W, H);
+  renderer.drawRectAlpha(C.bg, 0.96, 0, 0, W, H);
 
   const HDR_H = 80;
-  renderer.drawRectAlpha(C.bg, 0.97, 0, 0, W, HDR_H);
-  renderer.drawRectAlpha(accent, 0.40, 0, HDR_H - 2, W, 2);
+  renderer.drawRectAlpha(Boat.card, 0.98, 0, 0, W, HDR_H);
+  renderer.drawRectAlpha(Boat.sectionMint, 0.45, 0, HDR_H - 2, W, 2);
   renderer.drawText('← BACK', M, 0, 120, HDR_H, t(18, C.muted, 'left', '700'));
   renderer.drawText(UPGRADE_LABELS[id], 0, 0, W, HDR_H, tb(28, C.white, 'center'));
 
@@ -99,7 +112,7 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   renderer.drawText(`Level ${level}  ·  ${curName}`, 0, HDR_H + 12, W, 28, t(18, C.muted, 'center'));
   const pipStartX = W / 2 - (UPGRADE_MAX_LEVEL * 16) / 2 + 8;
   for (let i = 0; i < UPGRADE_MAX_LEVEL; i += 1) {
-    renderer.drawEllipse(i < level ? accent : C.border, pipStartX + i * 16, HDR_H + 52, 6, 6);
+    renderer.drawEllipse(i < level ? accent : Boat.pipEmpty, pipStartX + i * 16, HDR_H + 52, 6, 6);
   }
 
   const SZ = 200;
@@ -187,81 +200,115 @@ function drawConsumableCard(
 ): void {
   const stocked = stock >= maxStock;
   const accent = stocked ? C.gold : canAfford ? C.amber : C.muted;
-  const nameC = canAfford || stocked ? C.white : C.muted;
+  const nameC = canAfford || stocked ? Boat.labelBright : Boat.labelMuted;
   const costC = stocked ? C.gold : canAfford ? C.amber : C.muted;
 
-  renderer.drawRoundRectAlpha(C.bg, 0.94, x, y, width, height, 12);
-  renderer.drawRoundRectAlpha(C.amber, 0.07, x, y, width, height, 12);
+  renderer.drawRoundRectAlpha(Boat.card, 0.98, x, y, width, height, 14);
+  renderer.drawRoundRectAlpha(Boat.gearTint, 0.55, x, y, width, height, 14);
+  renderer.drawRoundRectAlpha(C.amber, canAfford || stocked ? 0.10 : 0.04, x, y, width, height, 14);
 
   const iconAreaSz = height;
-  const iconPad = 4;
+  const iconPad = 8;
   const iconSz = iconAreaSz - iconPad * 2;
-  renderer.drawRoundRectAlpha(accent, 0.20, x + 2, y + 2, iconAreaSz - 4, height - 4, 10);
+  renderer.drawRoundRectAlpha(accent, 0.24, x + 2, y + 2, iconAreaSz - 4, height - 4, 12);
   renderer.drawImage({ id: CONSUMABLE_ICON_IDS[id] }, x + iconPad, y + iconPad, iconSz, iconSz);
-  renderer.drawRectAlpha(C.border, 0.9, x + iconAreaSz + 2, y + 6, 1, height - 12);
+  renderer.drawRectAlpha(Boat.cardLine, 0.9, x + iconAreaSz + 2, y + 10, 1, height - 20);
 
-  const infoX = x + iconAreaSz + 8;
-  const infoW = width - iconAreaSz - 16;
-  const label = id === 'net' ? 'DRIFT NET' : 'LURE BAIT';
-  const desc = id === 'net' ? 'catch all fish' : 'attract fish';
+  const infoX = x + iconAreaSz + 14;
+  // Same as upgrade row: reserve price column; width here only centers text in the line box
+  const infoW = width - (infoX - x) - 58;
+  const { kicker, name } = CONSUMABLE_LINES[id];
+  const noFit = { useLayoutMaxWidth: false } as const;
+  renderer.drawText(kicker, infoX, y + 10, infoW, 20, t(14, Boat.labelMuted, 'left', '600', noFit));
+  renderer.drawText(name, infoX, y + 30, infoW, 32, t(19, nameC, 'left', '800', noFit));
 
-  renderer.drawText(label, infoX, y + 6, infoW, 24, t(16, nameC, 'left', '800'));
-  renderer.drawText(desc, infoX, y + 30, infoW, 20, t(13, C.muted, 'left'));
-
+  const pipY = y + 66;
+  const pipR = 6;
+  const pip0 = infoX + pipR;
+  const pipGap = 16;
   for (let i = 0; i < maxStock; i += 1) {
-    renderer.drawEllipse(i < stock ? accent : C.border, infoX + 4 + i * 14, y + 57, 5, 5);
+    const cx = pip0 + i * pipGap;
+    renderer.drawEllipse(i < stock ? accent : Boat.pipEmpty, cx, pipY, pipR, pipR);
   }
+  renderer.drawText(stocked ? 'FULL' : `$${cost}`, x + width - 58, y + 30, 52, 30, tb(19, costC, 'right', noFit));
+}
 
-  renderer.drawText(stocked ? 'FULL' : `$${cost}`, x + width - 52, y + 46, 48, 22, tb(15, costC, 'right'));
+function drawSectionHeader(
+  renderer: GameRenderer,
+  x: number,
+  y: number,
+  w: number,
+  label: string,
+  accent: string,
+): void {
+  renderer.drawRectAlpha(accent, 0.85, x, y + 4, 3, 16);
+  renderer.drawText(label, x + 10, y, w - 10, 22, t(15, accent, 'left', '800'));
+  renderer.drawRectAlpha(Boat.cardLine, 0.5, x, y + 22, w, 1);
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
   const M = UPGRADE_MARGIN;
+  const innerX = M + BOAT_SHEET_PAD;
+  const innerW = UPGRADE_BUTTON_W;
+  const contentW = CANVAS_WIDTH - 2 * M;
+  const statColGap = 10;
+  const bankW = Math.floor(innerW * 0.40);
+  const ldW = innerW - statColGap - bankW;
+  const ldX = innerX + bankW + statColGap;
+  const STATS_Y = 92;
+  const STATS_H = 86;
+  const HEADER_TITLE_Y = 10;
+
   renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  renderer.drawGradientRect('rgba(1,6,12,0.6)', 'rgba(1,6,12,0)', 0, 0, CANVAS_WIDTH, 160);
 
   if (state.upgradePanelOpen !== null) {
     drawUpgradePanel(renderer, state, state.upgradePanelOpen);
     return;
   }
 
-  const PANEL_Y = getUpgradeButtonRect(0).y - 42;
-  const PANEL_H = CANVAS_HEIGHT - PANEL_Y - 6;
-  renderer.drawRoundRectAlpha(C.bg, 0.82, M - 16, PANEL_Y, CANVAS_WIDTH - (M - 16) * 2, PANEL_H, 18);
+  const firstU = getUpgradeButtonRect(0);
+  const PANEL_Y = firstU.y - 32 - BOAT_DECK_TOP_PAD;
+  // Shell must include DIVE + BOAT_SHELL_BELOW_DIVE; capping to CANVAS_HEIGHT-EDGE was stealing inner padding
+  const diveBottom = DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT;
+  const targetShellBottom = diveBottom + BOAT_SHELL_BELOW_DIVE;
+  const shellBottom = Math.min(targetShellBottom, BOAT_SHELL_MAX_BOTTOM);
+  const PANEL_H = shellBottom - PANEL_Y;
 
-  renderer.drawText('FISHERCAT', 0, 14, CANVAS_WIDTH, 78, td(56, C.white, 'center'));
+  renderer.drawRoundRectAlpha(Boat.shell, Boat.shellAlpha, M, PANEL_Y, contentW, PANEL_H, 22);
+  renderer.drawRoundRectAlpha(Boat.shellRim, 0.4, M + 1, PANEL_Y + 1, contentW - 2, 3, 2);
+  renderer.drawRoundRectAlpha('rgba(80, 220, 200, 0.06)', 1, M + 5, PANEL_Y + 5, contentW - 10, 36, 18);
 
-  const STATS_Y = 88;
-  const STATS_H = 66;
-  const bankW = 150;
-  const ldW = CANVAS_WIDTH - M * 2 - bankW - 10;
-  const ldX = M + bankW + 10;
-  renderer.drawRoundRectAlpha(C.bg, 0.92, M, STATS_Y, bankW, STATS_H, 12);
-  renderer.drawText('BANK', M + 12, STATS_Y + 6, bankW - 24, 18, t(12, C.muted, 'left'));
-  renderer.drawText(`$${state.money}`, M + 12, STATS_Y + 24, bankW - 24, 36, tb(30, C.gold, 'left'));
+  renderer.drawText('FISHERCAT', 0, HEADER_TITLE_Y, CANVAS_WIDTH, 50, td(48, C.white, 'center'));
 
-  renderer.drawRoundRectAlpha(C.bg, 0.92, ldX, STATS_Y, ldW, STATS_H, 12);
-  renderer.drawText('LAST DIVE', ldX + 12, STATS_Y + 6, ldW, 18, t(12, C.muted, 'left'));
+  // Stats — one card, aligned to inner column
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, innerX, STATS_Y, innerW, STATS_H, 16);
+  renderer.drawRectAlpha(Boat.cardLine, 0.5, innerX + bankW, STATS_Y + 10, 1, STATS_H - 20);
+  renderer.drawText('BANK', innerX + 12, STATS_Y + 8, bankW - 20, 20, t(14, Boat.labelMuted, 'left', '700'));
+  renderer.drawText(`$${state.money}`, innerX + 10, STATS_Y + 32, bankW - 12, 44, tb(32, C.gold, 'left'));
+
+  renderer.drawText('LAST DIVE', ldX + 8, STATS_Y + 8, ldW - 12, 20, t(14, Boat.labelMuted, 'left', '700'));
   if (state.lastRunEarnings > 0) {
     const dur = Math.max(0, state.lastRunDurationSec);
     const durLabel = dur >= 60
       ? `${Math.floor(dur / 60)}m ${Math.floor(dur % 60)}s`
       : `${Math.floor(dur)}s`;
-    renderer.drawText(`$${state.lastRunEarnings}`, ldX + 12, STATS_Y + 24, ldW - 80, 36, tb(26, C.white, 'left'));
+    renderer.drawText(`$${state.lastRunEarnings}`, ldX + 8, STATS_Y + 32, ldW - 10, 30, tb(28, C.white, 'left'));
     renderer.drawText(
-      `${state.lastRunCatchCount} fish  ·  ${durLabel}`,
-      ldX + ldW - 200,
-      STATS_Y + 24,
-      200,
-      36,
-      t(15, C.muted, 'right'),
+      `${state.lastRunCatchCount} fish · ${durLabel}`,
+      ldX + 8,
+      STATS_Y + 64,
+      ldW - 10,
+      20,
+      t(15, Boat.labelMuted, 'left', '600'),
     );
   } else {
-    renderer.drawText('No dives yet', ldX + 12, STATS_Y + 24, ldW - 24, 36, t(15, C.muted, 'left'));
+    renderer.drawText('No run yet', ldX + 8, STATS_Y + 36, ldW - 10, 24, t(16, Boat.labelMuted, 'left', '600'));
+    renderer.drawText('Tap DIVE to start', ldX + 8, STATS_Y + 60, ldW - 10, 20, t(14, Boat.sectionMint, 'left', '600'));
   }
 
-  const UPG_LABEL_Y = getUpgradeButtonRect(0).y - 20;
-  renderer.drawText('UPGRADES', M, UPG_LABEL_Y, 160, 18, t(14, C.teal, 'left', '700'));
-  renderer.drawRectAlpha(C.teal, 0.22, M, UPG_LABEL_Y + 16, CANVAS_WIDTH - M * 2, 1);
+  const UPG_LABEL_Y = firstU.y - 32;
+  drawSectionHeader(renderer, innerX, UPG_LABEL_Y, innerW, 'UPGRADES', Boat.sectionMint);
 
   for (let i = 0; i < UPGRADE_KEYS.length; i += 1) {
     const key = UPGRADE_KEYS[i];
@@ -280,10 +327,9 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
     );
   }
 
-  const CON_LABEL_Y = CONSUMABLE_Y - 20;
-  renderer.drawText('CONSUMABLES', M, CON_LABEL_Y, 200, 18, t(14, C.amber, 'left', '700'));
-  renderer.drawRectAlpha(C.amber, 0.22, M, CON_LABEL_Y + 16, CANVAS_WIDTH - M * 2, 1);
+  drawSectionHeader(renderer, innerX, GEAR_HEADER_LABEL_Y, innerW, 'GEAR', Boat.sectionSand);
 
+  const cx = innerX;
   drawConsumableCard(
     renderer,
     'net',
@@ -291,7 +337,7 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
     NET_MAX_STOCK,
     NET_COST,
     state.canAffordConsumables.net,
-    M,
+    cx,
     CONSUMABLE_Y,
     CONSUMABLE_W,
     CONSUMABLE_H,
@@ -303,13 +349,13 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
     BAIT_MAX_STOCK,
     BAIT_COST,
     state.canAffordConsumables.bait,
-    M + CONSUMABLE_W + CONSUMABLE_GAP,
+    cx + CONSUMABLE_W + CONSUMABLE_GAP,
     CONSUMABLE_Y,
     CONSUMABLE_W,
     CONSUMABLE_H,
   );
 
-  renderer.drawRoundRect(C.teal, M, DIVE_BUTTON_Y, CANVAS_WIDTH - M * 2, DIVE_BUTTON_HEIGHT, 14);
-  renderer.drawRoundRectAlpha('#ffffff', 0.12, M + 4, DIVE_BUTTON_Y + 2, CANVAS_WIDTH - M * 2 - 8, 12, 10);
-  renderer.drawText('DIVE', M, DIVE_BUTTON_Y, CANVAS_WIDTH - M * 2, DIVE_BUTTON_HEIGHT, tb(32, C.white, 'center'));
+  renderer.drawRoundRect(Boat.dive, innerX, DIVE_BUTTON_Y, innerW, DIVE_BUTTON_HEIGHT, 16);
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, innerX + 3, DIVE_BUTTON_Y + 3, innerW - 6, 16, 10);
+  renderer.drawText('DIVE', innerX, DIVE_BUTTON_Y, innerW, DIVE_BUTTON_HEIGHT, tb(36, C.white, 'center'));
 }

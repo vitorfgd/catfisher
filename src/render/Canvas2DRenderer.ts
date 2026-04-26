@@ -109,14 +109,23 @@ export class Canvas2DRenderer implements GameRenderer {
       x;
     const ty = y + height / 2;
 
+    const naturalWidth = style.useLayoutMaxWidth === false;
     if (style.strokeColor && style.strokeWidth) {
       this.ctx.strokeStyle = style.strokeColor;
       this.ctx.lineWidth = style.strokeWidth;
       this.ctx.lineJoin = 'round';
-      this.ctx.strokeText(text, tx, ty, width);
+      if (naturalWidth) {
+        this.ctx.strokeText(text, tx, ty);
+      } else {
+        this.ctx.strokeText(text, tx, ty, width);
+      }
     }
 
-    this.ctx.fillText(text, tx, ty, width);
+    if (naturalWidth) {
+      this.ctx.fillText(text, tx, ty);
+    } else {
+      this.ctx.fillText(text, tx, ty, width);
+    }
     this.ctx.restore();
   }
 
