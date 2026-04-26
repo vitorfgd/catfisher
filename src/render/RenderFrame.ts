@@ -1,7 +1,7 @@
 import type { GameRenderer } from './GameRenderer';
 import type { RenderFishState, RenderSpearState, RenderState } from './RenderState';
 import { FishType, GamePhase } from '../core/Types';
-import { CANVAS_HEIGHT, CANVAS_WIDTH } from '../core/Constants';
+import { BAIT_LURE_ICON_PX, CANVAS_HEIGHT, CANVAS_WIDTH } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
 import { drawBoatScreen } from './boatScreen';
 import { drawHud } from './hud';
@@ -127,6 +127,10 @@ function drawFishSprite(
     if (type === FishType.Boss) {
       const a = hitFlash * 0.35;
       renderer.drawEllipseAlpha('#fff6f0', a, 0, 0, w * 0.36, h * 0.2);
+    } else if (type === FishType.Large) {
+      // Ellipse on the body only — full rect also whites out transparent sprite padding
+      const a = hitFlash * 0.4;
+      renderer.drawEllipseAlpha('#fff6f0', a, 0, 0, w * 0.42, h * 0.32);
     } else {
       renderer.drawRectAlpha('#ffffff', hitFlash * 0.5, -w / 2, -h / 2, w, h);
     }
@@ -400,17 +404,31 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   drawBackground(renderer);
 
   if (state.baitActive) {
+    const s = BAIT_LURE_ICON_PX;
+    const half = s / 2;
     const bp = 0.5 + 0.5 * Math.sin(Date.now() / 220);
-    renderer.drawEllipseAlpha(C.amber, 0.12 + bp * 0.14, state.baitX, state.baitY, 48, 36);
-    renderer.drawEllipseAlpha(C.amber, 0.30 + bp * 0.20, state.baitX, state.baitY, 22, 16);
-    renderer.drawEllipse(C.gold, state.baitX, state.baitY, 6, 6);
+    // Soft water glow under the same asset as the boat + HUD
+    renderer.drawEllipseAlpha(C.amber, 0.11 + bp * 0.1, state.baitX, state.baitY, s * 0.9, s * 0.72);
     const rings = Math.ceil(state.baitFraction * 4);
     for (let i = 0; i < rings; i += 1) {
-      renderer.drawEllipseAlpha(C.amber, 0.18 + bp * 0.10, state.baitX, state.baitY, 34 + i * 6, 26 + i * 4);
+      renderer.drawEllipseAlpha(C.amber, 0.14 + bp * 0.08, state.baitX, state.baitY, half * 0.6 + i * 7, half * 0.45 + i * 5);
     }
+    renderer.drawImage(
+      { id: AssetIds.iconBait },
+      state.baitX - half,
+      state.baitY - half,
+      s,
+      s,
+    );
   }
 
-  for (const fish of state.fish) drawFish(renderer, fish);
+  // Rock boss can cover small fish: draw it first, then the rest, so the player can see targets
+  for (const fish of state.fish) {
+    if (fish.type === FishType.Boss) drawFish(renderer, fish);
+  }
+  for (const fish of state.fish) {
+    if (fish.type !== FishType.Boss) drawFish(renderer, fish);
+  }
   if (isFtue) {
     drawFtueHandWorld(renderer, state);
   }

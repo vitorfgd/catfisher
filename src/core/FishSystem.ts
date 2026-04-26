@@ -16,9 +16,16 @@ import {
   FISH_VALUE_MIN,
   FISH_Y_MAX_FRAC,
   FISH_Y_MIN_FRAC,
+  BAIT_ATTRACT,
+  BAIT_COMING_ATTRACT_MULTIPLIER,
+  BAIT_COMING_MID_PX2,
+  BAIT_ORBIT_RADIUS,
+  BAIT_TANGENT_ACCEL,
+  BOSS_AVOIDANCE_ANCHOR_OFFSET_Y,
   BASE_FISH_SPAWN_INTERVAL,
   MIN_FISH_SPAWN_INTERVAL,
   BOSS_FISH_MAX_HP,
+  BOSS_MIN_CENTER_DISTANCE_FROM_PLAYER,
   WAVE_DURATION_SEC,
   PLAYER_X,
   PLAYER_Y,
@@ -204,21 +211,23 @@ export function updateFish(
       continue;
     }
 
-    if (baitX !== null && baitY !== null) {
+    if (baitX !== null && baitY !== null && f.type !== FishType.Boss) {
       const dx = baitX - f.x;
       const dy = baitY - f.y;
       const dist = Math.sqrt(dx * dx + dy * dy) + 1;
-      if (dist < 55) {
-        // Close to bait — orbit tangentially so fish swarm in a circle
+      if (dist < BAIT_ORBIT_RADIUS) {
+        // Close to bait — orbit tangentially so fish swarm in a ring around the lure
         const tangX = -dy / dist;
         const tangY =  dx / dist;
-        f.vx = f.vx * 0.88 + tangX * 180 * dt;
-        f.vy = f.vy * 0.88 + tangY * 180 * dt;
+        f.vx = f.vx * 0.88 + tangX * BAIT_TANGENT_ACCEL * dt;
+        f.vy = f.vy * 0.88 + tangY * BAIT_TANGENT_ACCEL * dt;
       } else {
-        // Far — strong attraction toward bait
-        const pull = 260 / dist;
-        f.vx += (dx / dist) * pull * dt;
-        f.vy += (dy / dist) * pull * dt;
+        let attract = BAIT_ATTRACT;
+        if (dist > BAIT_ORBIT_RADIUS && dist < BAIT_COMING_MID_PX2) {
+          attract *= BAIT_COMING_ATTRACT_MULTIPLIER;
+        }
+        f.vx += (dx / dist) * (attract / dist) * dt;
+        f.vy += (dy / dist) * (attract / dist) * dt;
       }
       const spd = Math.sqrt(f.vx * f.vx + f.vy * f.vy);
       const maxSpd = FISH_SPEEDS_MAX[f.type] * 1.6;
@@ -261,6 +270,26 @@ export function updateFish(
       // Soft Y-boundary spring
       if (f.y < Y_SOFT_MIN) f.vy += 160 * dt;
       else if (f.y > Y_SOFT_MAX) f.vy -= 160 * dt;
+    }
+
+    // Keep rock boss from covering the player / play lane (huge sprite vs feet-anchored cat)
+    if (f.type === FishType.Boss) {
+      const pY = PLAYER_Y - BOSS_AVOIDANCE_ANCHOR_OFFSET_Y;
+      const bdx = f.x - PLAYER_X;
+      const bdy = f.y - pY;
+      const bdist = Math.hypot(bdx, bdy);
+      const r = BOSS_MIN_CENTER_DISTANCE_FROM_PLAYER;
+      if (bdist < r) {
+        if (bdist > 0.2) {
+          const nx = bdx / bdist;
+          const ny = bdy / bdist;
+          f.x = PLAYER_X + nx * r;
+          f.y = pY + ny * r;
+        } else {
+          f.x = PLAYER_X + r;
+          f.y = pY;
+        }
+      }
     }
 
     if (f.hitFlash > 0) f.hitFlash = Math.max(0, f.hitFlash - dt * 6);
@@ -339,6 +368,43 @@ export function spawnBossFish(id: number, rng: Rng): FishState {
   const type = FishType.Boss;
   const s = spawnFishOfType(id, rng, type);
   return { ...s, hitPoints: BOSS_FISH_MAX_HP };
+}
+
+/**
+ * A couple of off-screen entrant fish aimed at the lure (same as wave `spawnInward` but toward the bait point).
+ * They then join the same bait orbit as everyone else in `updateFish`.
+ */
+export function spawnBaitLureSchool(
+  startId: number,
+  rng: Rng,
+  bx: number,
+  by: number,
+  count: number,
+): FishState[] {
+  const types: FishType[] = [];
+  for (let i = 0; i < count; i += 1) {
+    types.push(i % 2 === 0 ? FishType.Small : FishType.Medium);
+  }
+  const r: FishState[] = [];
+  for (let i = 0; i < count; i += 1) {
+    const t = types[i]!;
+    const sp = rng.between(FISH_SPEEDS_MIN[t], FISH_SPEEDS_MAX[t]) * 0.92;
+    const p = spawnInwardFromEdge(rng, bx, by, sp);
+    r.push({
+      id: startId + i,
+      x: p.x,
+      y: p.y,
+      vx: p.vx,
+      vy: p.vy,
+      wanderTimer: 1.6,
+      age: 0,
+      hasAttacked: false,
+      type: t,
+      alive: true,
+      hitFlash: 0,
+    });
+  }
+  return r;
 }
 
 export function getFishHitbox(fish: FishState): { x: number; y: number; hw: number; hh: number } {

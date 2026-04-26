@@ -35,6 +35,8 @@ export const FTUE_REMAINING_FLEESPEED = 780;
 // Dive round timer: upgrade "oxygen" still adds max seconds per run (see UpgradeBalance)
 export const BASE_OXYGEN = 38;
 export const OXYGEN_PER_LEVEL = 7;
+/** O₂ meter loss per real second: >1 makes the bar drain faster (same `roundTimeMax` in seconds). */
+export const OXYGEN_DRAIN_RATE = 1.4;
 
 /** Difficulty "waves" in HUD: wave = 1 + floor(sessionTime / WAVE_DURATION_SEC). */
 export const WAVE_DURATION_SEC = 8;
@@ -79,6 +81,16 @@ export const BOSS_SPAWN_FIRST_DELAY = 20;
 export const BOSS_FISH_MAX_HP = 24;
 /** Spear levels below this deal no damage to the boss (still shows hit feedback) */
 export const BOSS_MIN_SPEAR_LEVEL_TO_DAMAGE = 2;
+/**
+ * How far **above** `PLAYER_Y` we measure “blocking” (cat sprite vs feet anchor).
+ * Separation uses the point `(PLAYER_X, PLAYER_Y - this)`.
+ */
+export const BOSS_AVOIDANCE_ANCHOR_OFFSET_Y = 56;
+/**
+ * Min distance from the avoidance point so the huge boss can’t sit over the play lane.
+ * (Larger = rockfish is pushed more into the open water.)
+ */
+export const BOSS_MIN_CENTER_DISTANCE_FROM_PLAYER = 198;
 /** Softening net vs boss so it is still secondary to the speargun */
 export const BOSS_NET_DAMAGE = 6;
 
@@ -173,3 +185,20 @@ export const BAIT_COST = 45;
 export const NET_MAX_STOCK = 3;
 export const BAIT_MAX_STOCK = 3;
 export const BAIT_DURATION = 6.0;            // seconds bait remains active
+/** Dropped at cave center; in-world `iconBait` draw size (menu uses same asset at ~40px in HUD) */
+export const BAIT_LURE_ICON_PX = 56;
+/** How many small fish appear when a lure is used (capped by `FISH_SPAWN_MAX_ALIVE`) */
+export const BAIT_SCHOOL_FISH_COUNT = 2;
+/**
+ * Lured fish: inside this dist they orbit; outside they’re pulled in (larger = wider swarm ring)
+ */
+export const BAIT_ORBIT_RADIUS = 80;
+export const BAIT_TANGENT_ACCEL = 200;
+export const BAIT_ATTRACT = 300;
+/** On use: fish this close to the lure get a velocity kick toward it (in addition to ongoing pull) */
+export const BAIT_NUDGE_NEAR_PX = 400;
+export const BAIT_NUDGE_IMPULSE = 240;
+/** Fish slightly farther: stronger pull in `updateFish` (multiplier on attract term) */
+export const BAIT_COMING_ATTRACT_MULTIPLIER = 1.6;
+/** Between orbit and this distance, attraction runs stronger so fish on their way in gather faster */
+export const BAIT_COMING_MID_PX2 = 480;

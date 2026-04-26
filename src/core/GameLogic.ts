@@ -20,6 +20,9 @@ import {
   BAIT_COST,
   BAIT_DURATION,
   BAIT_MAX_STOCK,
+  BAIT_NUDGE_IMPULSE,
+  BAIT_NUDGE_NEAR_PX,
+  BAIT_SCHOOL_FISH_COUNT,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
   DIVE_DURATION,
@@ -29,6 +32,7 @@ import {
   TREASURE_REVEAL_WHITE_PEAK_SEC,
   NET_COST,
   NET_MAX_STOCK,
+  OXYGEN_DRAIN_RATE,
   PLAYER_X,
   PLAYER_Y,
   PUFFER_TIME_BONUS,
@@ -77,6 +81,7 @@ import {
   applyFtueShowcaseFleeAfterFirstCatch,
   removeDespawnedFish,
   spawnFish,
+  spawnBaitLureSchool,
   spawnBossFish,
   spawnFishOfType,
   updateFish,
@@ -456,9 +461,43 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         state.consumables.bait -= 1;
         state.baitActive = true;
         state.baitTimer = BAIT_DURATION;
-        // Drop bait at center of cave
+        // Drop at center of cave; same `iconBait` art as the boat + HUD
         state.baitX = CANVAS_WIDTH / 2;
         state.baitY = CANVAS_HEIGHT * 0.38;
+        const bnx = state.baitX;
+        const bny = state.baitY;
+        for (const f of state.fish) {
+          if (!f.alive) continue;
+          if (f.type === FishType.Boss || f.ftueFleeing) continue;
+          const dx = bnx - f.x;
+          const dy = bny - f.y;
+          const d2 = dx * dx + dy * dy;
+          const n2 = BAIT_NUDGE_NEAR_PX * BAIT_NUDGE_NEAR_PX;
+          if (d2 >= n2) continue;
+          const d = Math.sqrt(d2) + 0.01;
+          const t = 1 - d / BAIT_NUDGE_NEAR_PX;
+          const s = BAIT_NUDGE_IMPULSE * t;
+          f.vx += (dx / d) * s;
+          f.vy += (dy / d) * s;
+        }
+        {
+          const liveN = state.fish.filter((f) => f.alive).length;
+          const n = Math.min(
+            BAIT_SCHOOL_FISH_COUNT,
+            Math.max(0, FISH_SPAWN_MAX_ALIVE - liveN),
+          );
+          if (n > 0) {
+            const newFish = spawnBaitLureSchool(
+              state.nextFishId,
+              rng,
+              bnx,
+              bny,
+              n,
+            );
+            state.fish.push(...newFish);
+            state.nextFishId += n;
+          }
+        }
       }
       continue;
     }
@@ -511,7 +550,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   }
 
   state.sessionTime += dt;
-  state.roundTimeLeft = Math.max(0, state.roundTimeLeft - dt);
+  state.roundTimeLeft = Math.max(0, state.roundTimeLeft - dt * OXYGEN_DRAIN_RATE);
 
   // Wave N: start-of-wave cluster; extra from wave is capped, total respects max alive
   if (WAVE_DURATION_SEC > 0) {
