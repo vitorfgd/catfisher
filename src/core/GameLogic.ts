@@ -74,6 +74,7 @@ import {
 import {
   getFishValue,
   getModulatedSpawnInterval,
+  applyFtueShowcaseFleeAfterFirstCatch,
   removeDespawnedFish,
   spawnFish,
   spawnBossFish,
@@ -98,14 +99,13 @@ import {
   updateParticles,
 } from './ParticleSystem';
 
-/**
- * Reels-style first dive: a few on-screen, motionless fish. Positioned so all stay in frame
- * with FTUE zoom; [0] = hand + tap target.
- */
+const FTUE_SHOWCASE_FISH_SCALE = 1.58;
+
+/** Cluster near the cat; [0] = hand + tap target. */
 const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
-  { x: 155, y: 272, type: FishType.Small },
-  { x: 255, y: 218, type: FishType.Small },
-  { x: 340, y: 268, type: FishType.Medium },
+  { x: PLAYER_X - 96, y: PLAYER_Y - 248, type: FishType.Small },
+  { x: PLAYER_X + 108, y: PLAYER_Y - 246, type: FishType.Small },
+  { x: PLAYER_X - 4, y: PLAYER_Y - 318, type: FishType.Medium },
 ];
 
 /**
@@ -130,6 +130,8 @@ export function bootstrapActionFtueDive(state: FullGameState): void {
       age: 0,
       hasAttacked: false,
       type: row.type,
+      drawScale: FTUE_SHOWCASE_FISH_SCALE,
+      ftueShowcase: true,
       alive: true,
       hitFlash: 0,
     });
@@ -151,9 +153,9 @@ function exitFtueDiveState(state: FullGameState): void {
   for (const f of state.fish) {
     if (!f.alive) continue;
     const dir = rng.next() < 0.5 ? 1 : -1;
-    f.vx = dir * rng.between(120, 200);
-    f.vy = rng.between(-50, 50);
-    f.wanderTimer = rng.between(1.4, 2.2);
+    f.vx = dir * rng.between(22, 40);
+    f.vy = rng.between(-18, 18);
+    f.wanderTimer = rng.between(3.2, 5.5);
   }
   state.pendingEvents.push({ type: 'ftueDiveExited' });
 }
@@ -438,6 +440,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
             continue;
           }
           fish.alive = false;
+          applyFtueShowcaseFleeAfterFirstCatch(state.fish, fish);
           const value = Math.floor(
             getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
             * getHaulMultiplier(state.upgrades),
@@ -678,6 +681,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     resolvedFishIds.add(fishId);
 
     fish.alive = false;
+    applyFtueShowcaseFleeAfterFirstCatch(state.fish, fish);
     const catchValue = Math.floor(
       getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
       * getHaulMultiplier(state.upgrades),
@@ -840,6 +844,7 @@ export function getRenderState(state: FullGameState): RenderState {
           x: current.x,
           y: current.y,
           type: current.type,
+          drawScale: current.drawScale,
           hitFlash: current.hitFlash,
           facingLeft: current.vx > 0,  // sprites face LEFT natively — flip when moving right
           rotation,
@@ -893,7 +898,6 @@ export function getRenderState(state: FullGameState): RenderState {
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
-    bossScreenTint: state.fish.some((f) => f.type === FishType.Boss && f.alive) ? 0.24 : 0,
     catchFlash: state.catchFlash,
     treasureCinematic: (() => {
       const tr = state.treasureReveal;

@@ -22,6 +22,7 @@ import {
   WAVE_DURATION_SEC,
   PLAYER_X,
   PLAYER_Y,
+  FTUE_REMAINING_FLEESPEED,
 } from './Constants';
 
 const Y_MIN = CANVAS_HEIGHT * FISH_Y_MIN_FRAC;
@@ -162,6 +163,18 @@ export function spawnFish(
   };
 }
 
+/** When a FTUE tutorial fish is caught, the other showcase fish bolt away from the player. */
+export function applyFtueShowcaseFleeAfterFirstCatch(
+  allFish: FishState[],
+  caught: FishState,
+): void {
+  if (!caught.ftueShowcase) return;
+  for (const f of allFish) {
+    if (f.id === caught.id || !f.alive) continue;
+    if (f.ftueShowcase) f.ftueFleeing = true;
+  }
+}
+
 export function updateFish(
   fish: FishState[],
   dt: number,
@@ -173,8 +186,23 @@ export function updateFish(
     if (!f.alive) continue;
 
     f.age += dt;
+
+    if (f.ftueFleeing) {
+      const dx = f.x - PLAYER_X;
+      const dy = f.y - PLAYER_Y;
+      const len = Math.hypot(dx, dy) || 1;
+      const sp = FTUE_REMAINING_FLEESPEED;
+      f.vx = (dx / len) * sp;
+      f.vy = (dy / len) * sp;
+    }
+
     f.x += f.vx * dt;
     f.y += f.vy * dt;
+
+    if (f.ftueFleeing) {
+      if (f.hitFlash > 0) f.hitFlash = Math.max(0, f.hitFlash - dt * 6);
+      continue;
+    }
 
     if (baitX !== null && baitY !== null) {
       const dx = baitX - f.x;
@@ -243,8 +271,9 @@ export function removeDespawnedFish(fish: FishState[]): FishState[] {
   const margin = FISH_OFFSCREEN_MARGIN * 2;
   return fish.filter((f) => {
     if (!f.alive) return false;
-    const hw = FISH_HITBOX_W[f.type];
-    const hh = FISH_HITBOX_H[f.type];
+    const s = f.drawScale ?? 1;
+    const hw = FISH_HITBOX_W[f.type] * s;
+    const hh = FISH_HITBOX_H[f.type] * s;
     return (
       f.x > -margin - hw &&
       f.x < CANVAS_WIDTH + margin + hw &&
@@ -313,10 +342,11 @@ export function spawnBossFish(id: number, rng: Rng): FishState {
 }
 
 export function getFishHitbox(fish: FishState): { x: number; y: number; hw: number; hh: number } {
+  const s = fish.drawScale ?? 1;
   return {
     x: fish.x,
     y: fish.y,
-    hw: FISH_HITBOX_W[fish.type] / 2,
-    hh: FISH_HITBOX_H[fish.type] / 2,
+    hw: (FISH_HITBOX_W[fish.type] / 2) * s,
+    hh: (FISH_HITBOX_H[fish.type] / 2) * s,
   };
 }

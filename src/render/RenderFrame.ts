@@ -138,7 +138,17 @@ function drawFishSprite(
 }
 
 function drawFish(renderer: GameRenderer, fish: RenderFishState): void {
-  drawFishSprite(renderer, fish.x, fish.y, fish.type, fish.facingLeft, fish.hitFlash, fish.rotation, fish.isAggressive);
+  drawFishSprite(
+    renderer,
+    fish.x,
+    fish.y,
+    fish.type,
+    fish.facingLeft,
+    fish.hitFlash,
+    fish.rotation,
+    fish.isAggressive,
+    fish.drawScale ?? 1,
+  );
 }
 
 function drawPlayer(renderer: GameRenderer, px: number, py: number, aimAngle: number): void {
@@ -245,7 +255,8 @@ const FTUE_CLICK_DIP_PX = 9;
 function drawFtueHandWorld(renderer: GameRenderer, state: RenderState): void {
   const target = state.fish[0];
   if (target == null) return;
-  const fishW = FISH_DRAW_WIDTH[target.type];
+  const s = target.drawScale ?? 1;
+  const fishW = FISH_DRAW_WIDTH[target.type] * s;
   const fishH = fishW / FISH_ASPECT_RATIO[target.type];
   // Tap point on fish; Y-only motion reads as a click (no sin X/Y loop).
   const press = ftueClickPressT();
@@ -412,10 +423,6 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
   renderer.pop();
 
-  if (state.phase === GamePhase.Action && state.bossScreenTint > 0) {
-    // Light transparent red wash (dark wine reads as “dimmed”; this reads as threat)
-    renderer.drawRectAlpha('#ffb4b0', state.bossScreenTint, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-  }
   if (state.phase === GamePhase.Action && state.catchFlash > 0) {
     const f = state.catchFlash;
     renderer.drawRectAlpha('#fff4e0', f * 0.38, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);

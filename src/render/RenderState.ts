@@ -26,6 +26,8 @@ export interface RenderFishState {
   x: number;
   y: number;
   type: FishType;
+  /** Omitted = 1 — render-only multiplier for `drawFishSprite` */
+  drawScale?: number;
   hitFlash: number;
   facingLeft: boolean;
   rotation: number;      // radians — tilt sprite to match swim direction
@@ -87,8 +89,6 @@ export interface RenderState {
   // Transition
   diveAlpha: number; // 0 = boat fully visible, 1 = fully underwater
 
-  /** Full-screen red threat tint when rock boss is present (0 = off) */
-  bossScreenTint: number;
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;
 

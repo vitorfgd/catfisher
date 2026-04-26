@@ -71,6 +71,12 @@ export interface FishState {
   type: FishType;
   alive: boolean;
   hitFlash: number;
+  /** Visual + hitbox scale; omitted = 1. Used for FTUE showcase fish. */
+  drawScale?: number;
+  /** The three first-dive tutorial fish — when one is caught, the rest panic-flee. */
+  ftueShowcase?: boolean;
+  /** Sustained escape from player; handled in `updateFish` (bypasses wander + speed cap). */
+  ftueFleeing?: boolean;
   /** Boss only — damage remaining; normal fish use one-hit default */
   hitPoints?: number;
 }

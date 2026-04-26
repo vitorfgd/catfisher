@@ -29,6 +29,8 @@ export const FISH_SPAWN_MAX_ALIVE = 13;
 /** Continuous spawn interval multiplier grows with wave (1 = wave 0, +~9% per wave, capped) */
 export const FISH_SPAWN_WAVE_INTERVAL_SCALE_PER_WAVE = 0.09;
 export const FISH_SPAWN_WAVE_INTERVAL_SCALE_CAP = 1.85;
+/** When the first first-dive showcase fish is caught, the other two use this (px/s) in `ftueFleeing` mode. */
+export const FTUE_REMAINING_FLEESPEED = 780;
 
 // Dive round timer: upgrade "oxygen" still adds max seconds per run (see UpgradeBalance)
 export const BASE_OXYGEN = 38;
