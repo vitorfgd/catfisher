@@ -1,7 +1,8 @@
 import type { GameRenderer } from './GameRenderer';
 import type { RenderFishState, RenderSpearState, RenderState } from './RenderState';
 import { FishType, GamePhase } from '../core/Types';
-import { BAIT_LURE_ICON_PX, CANVAS_HEIGHT, CANVAS_WIDTH } from '../core/Constants';
+import { BAIT_LURE_ICON_PX, CANVAS_HEIGHT, CANVAS_WIDTH, TURRET_SPRITE_H, TURRET_SPRITE_W } from '../core/Constants';
+import { getTurretMuzzleWorld } from '../core/SpearSystem';
 import { AssetIds } from '../shared/AssetIds';
 import { drawBoatScreen } from './boatScreen';
 import { drawHud } from './hud';
@@ -13,11 +14,6 @@ const TREASURE_CINEMATIC_ASPECT: Record<'closed' | 'open', number> = {
   closed: 1.15,
   open: 1.1,
 };
-
-const PLAYER_SPRITE_W = 164;
-const PLAYER_SPRITE_H = 164;
-const GUN_TIP_X = 65;
-const GUN_TIP_Y = 86;
 
 const FISH_IMAGE_IDS: Record<FishType, string> = {
   [FishType.Small]: AssetIds.fishSmall,
@@ -155,18 +151,15 @@ function drawFish(renderer: GameRenderer, fish: RenderFishState): void {
   );
 }
 
-function drawPlayer(renderer: GameRenderer, px: number, py: number, aimAngle: number): void {
-  const drawY = py - PLAYER_SPRITE_H;
-  const facingRight = Math.cos(aimAngle) >= 0;
-  if (facingRight) {
-    renderer.drawImage({ id: AssetIds.playerCat }, px - PLAYER_SPRITE_W / 2, drawY, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
-  } else {
-    renderer.pushTranslate(px + PLAYER_SPRITE_W / 2, drawY);
-    renderer.pushScale(-1, 1, 0, 0);
-    renderer.drawImage({ id: AssetIds.playerCat }, 0, 0, PLAYER_SPRITE_W, PLAYER_SPRITE_H);
-    renderer.pop();
-    renderer.pop();
-  }
+function drawPlayer(renderer: GameRenderer, px: number, py: number): void {
+  const drawY = py - TURRET_SPRITE_H;
+  renderer.drawImage(
+    { id: AssetIds.playerTurret },
+    px - TURRET_SPRITE_W / 2,
+    drawY,
+    TURRET_SPRITE_W,
+    TURRET_SPRITE_H,
+  );
 }
 
 function drawTether(renderer: GameRenderer, fx: number, fy: number, tx2: number, ty2: number): void {
@@ -184,11 +177,10 @@ function drawSpear(
   renderer: GameRenderer,
   playerX: number,
   playerY: number,
-  aimAngle: number,
   spear: RenderSpearState,
 ): void {
-  const right = Math.cos(aimAngle) >= 0;
-  drawTether(renderer, playerX + (right ? GUN_TIP_X : -GUN_TIP_X), playerY - GUN_TIP_Y, spear.x, spear.y);
+  const muzzle = getTurretMuzzleWorld(playerX, playerY);
+  drawTether(renderer, muzzle.x, muzzle.y, spear.x, spear.y);
   if (spear.carryingFishType !== null) {
     const off = 28;
     drawFishSprite(
@@ -432,8 +424,8 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   if (isFtue) {
     drawFtueHandWorld(renderer, state);
   }
-  for (const spear of state.spears) drawSpear(renderer, state.player.x, state.player.y, state.player.aimAngle, spear);
-  drawPlayer(renderer, state.player.x, state.player.y, state.player.aimAngle);
+  for (const spear of state.spears) drawSpear(renderer, state.player.x, state.player.y, spear);
+  drawPlayer(renderer, state.player.x, state.player.y);
   drawParticles(renderer, state.particles);
   drawFloatingTexts(renderer, state.floatingTexts);
   if (actionZoomed) {

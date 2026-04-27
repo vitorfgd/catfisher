@@ -1,3 +1,5 @@
+import { TURRET_SPRITE_H } from './Constants';
+
 /**
  * In Action, the world is drawn with a uniform zoom around a focus (usually near the player).
  * Pointer events arrive in unscaled canvas space; this maps them back to world coords for aim.
@@ -8,7 +10,8 @@ export const FTUE_VIEW_ZOOM = 1.28;
 export const ACTION_ZOOM_EASE_IN_SEC = 0.75;
 
 export function actionViewFocus(playerX: number, playerY: number): { x: number; y: number } {
-  return { x: playerX, y: playerY - 102 };
+  // Focus through the turret (mid-upper) so zoom keeps aim and fish readable
+  return { x: playerX, y: playerY - TURRET_SPRITE_H * 0.45 };
 }
 
 /**

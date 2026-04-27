@@ -1,4 +1,10 @@
-import { CANVAS_HEIGHT, CANVAS_WIDTH, PUFFER_TIME_BONUS, WAVE_DURATION_SEC } from '../core/Constants';
+import {
+  CANVAS_HEIGHT,
+  CANVAS_WIDTH,
+  PUFFER_TIME_BONUS,
+  TURRET_SPRITE_H,
+  WAVE_DURATION_SEC,
+} from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
 import {
   HUD_BAIT_BUTTON_CX,
@@ -9,8 +15,6 @@ import {
 import type { GameRenderer } from './GameRenderer';
 import type { RenderState } from './RenderState';
 import { C, t, tb, td } from './theme';
-
-const PLAYER_SPRITE_H = 164;
 
 /** Top-left: wave # + clear horizontal progress (fills left→right through the current block). */
 const WAVE_W = 96;
@@ -131,7 +135,7 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     const fontSize = combo >= 10 ? 54 : combo >= 5 ? 40 : 30;
     const boxW = combo >= 10 ? 260 : combo >= 5 ? 210 : 180;
     const cx = state.player.x;
-    const cy = state.player.y - PLAYER_SPRITE_H - 20;
+    const cy = state.player.y - TURRET_SPRITE_H - 20;
 
     if (combo >= 5) renderer.drawEllipseAlpha(color, 0.07 + 0.05 * pulse, cx, cy, boxW * 0.55, fontSize * 0.9);
     if (combo >= 10) renderer.drawEllipseAlpha(color, 0.10 + 0.06 * pulse, cx, cy, boxW * 0.72, fontSize * 1.3);
@@ -144,7 +148,7 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     const alpha = (0.85 + 0.15 * p).toFixed(2);
     const glow = `rgba(80,220,255,${alpha})`;
     const cx = state.player.x;
-    const cy = state.player.y - PLAYER_SPRITE_H - 60;
+    const cy = state.player.y - TURRET_SPRITE_H - 60;
     renderer.drawEllipseAlpha(glow, 0.08 + 0.06 * p, cx, cy, 140, 36);
     renderer.drawText(`+${PUFFER_TIME_BONUS}s TIME`, cx - 130, cy - 22, 260, 44, td(36, glow, 'center'));
   }

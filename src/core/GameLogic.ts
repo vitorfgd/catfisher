@@ -90,6 +90,7 @@ import {
   attachCatchToSpear,
   detectSpearFishCollisions,
   fireSpear,
+  getTurretMuzzleWorld,
   removeResolvedSpears,
   returnSpearWithoutCatch,
   updateSpears,
@@ -106,11 +107,14 @@ import {
 
 const FTUE_SHOWCASE_FISH_SCALE = 1.58;
 
-/** Cluster near the cat; [0] = hand + tap target. */
+/**
+ * Cluster above the turret; [0] = hand + tap target.
+ * Y is fixed in screen space (layout tuned when player stood on the pedestal; turret is bottom-fixed).
+ */
 const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
-  { x: PLAYER_X - 96, y: PLAYER_Y - 248, type: FishType.Small },
-  { x: PLAYER_X + 108, y: PLAYER_Y - 246, type: FishType.Small },
-  { x: PLAYER_X - 4, y: PLAYER_Y - 318, type: FishType.Medium },
+  { x: PLAYER_X - 96, y: 362, type: FishType.Small },
+  { x: PLAYER_X + 108, y: 364, type: FishType.Small },
+  { x: PLAYER_X - 4, y: 292, type: FishType.Medium },
 ];
 
 /**
@@ -513,8 +517,9 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       state.player.y,
       getActionViewZoomForSession(state.sessionTime, state.ftueActive),
     );
-    const dx = w.x - state.player.x;
-    const dy = w.y - state.player.y;
+    const muzzle = getTurretMuzzleWorld(state.player.x, state.player.y);
+    const dx = w.x - muzzle.x;
+    const dy = w.y - muzzle.y;
     if (dx !== 0 || dy !== 0) {
       state.player.aimAngle = Math.atan2(dy, dx);
     }

@@ -1,7 +1,20 @@
 import type { FishState, FishType, PlayerState, SpearState } from './Types';
 import { SpearMode } from './Types';
-import { SPEAR_SPEED } from './Constants';
+import {
+  SPEAR_SPEED,
+  TURRET_MUZZLE_U,
+  TURRET_MUZZLE_V,
+  TURRET_SPRITE_H,
+  TURRET_SPRITE_W,
+} from './Constants';
 import { getFishHitbox } from './FishSystem';
+
+/** World position of the cannon muzzle (turret is not mirrored; aim is ignored for anchor). */
+export function getTurretMuzzleWorld(playerX: number, playerY: number): { x: number; y: number } {
+  const x = playerX - TURRET_SPRITE_W / 2 + TURRET_MUZZLE_U * TURRET_SPRITE_W;
+  const y = playerY - TURRET_SPRITE_H + TURRET_MUZZLE_V * TURRET_SPRITE_H;
+  return { x, y };
+}
 
 export interface DeliveredCatch {
   spearId: number;
@@ -17,10 +30,11 @@ export function fireSpear(
   aimAngle: number,
   maxDistance: number,
 ): SpearState {
+  const muzzle = getTurretMuzzleWorld(player.x, player.y);
   return {
     id,
-    x: player.x + Math.cos(aimAngle) * 26,
-    y: player.y + Math.sin(aimAngle) * 26,
+    x: muzzle.x,
+    y: muzzle.y,
     vx: Math.cos(aimAngle) * SPEAR_SPEED,
     vy: Math.sin(aimAngle) * SPEAR_SPEED,
     fireAngle: aimAngle,
@@ -72,8 +86,7 @@ export function updateSpears(
     }
 
     if (spear.mode === SpearMode.Returning) {
-      const targetX = player.x + Math.cos(player.aimAngle) * 12;
-      const targetY = player.y + Math.sin(player.aimAngle) * 12;
+      const { x: targetX, y: targetY } = getTurretMuzzleWorld(player.x, player.y);
       const dx = targetX - spear.x;
       const dy = targetY - spear.y;
       const dist = Math.hypot(dx, dy);

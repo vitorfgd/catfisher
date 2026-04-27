@@ -21,6 +21,8 @@ export const AssetIds = {
   bubble: 'bubble',
   underwaterBg: 'underwaterBg',
   playerCat: 'playerCat',
+  /** Bottom-fixed turret; line/spear emits from the cannon muzzle in code */
+  playerTurret: 'playerTurret',
   boatBg: 'boatBg',
   boatSprite: 'boatSprite',
 

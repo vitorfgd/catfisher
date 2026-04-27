@@ -4,11 +4,18 @@ export const CANVAS_WIDTH = 480;
 export const CANVAS_HEIGHT = 854;
 export const GAME_ASPECT_RATIO = CANVAS_WIDTH / CANVAS_HEIGHT;
 
-// Player — positioned to stand on the stone pedestal in the underwater background
+// Player — turret fixed to the bottom of the playfield; (PLAYER_X, PLAYER_Y) = bottom center of the sprite
 export const PLAYER_X = CANVAS_WIDTH / 2;
-export const PLAYER_Y = CANVAS_HEIGHT * 0.714; // feet land on top of the pedestal (~73% height)
+export const PLAYER_Y = CANVAS_HEIGHT;
 export const PLAYER_WIDTH = 34;
 export const PLAYER_HEIGHT = 48;
+
+/** Draw size for `playerTurret` art (source PNG is 500x500) */
+export const TURRET_SPRITE_W = 240;
+export const TURRET_SPRITE_H = 240;
+/** Muzzle in sprite space: U = horizontal from left edge, V = vertical from top (0 = top). */
+export const TURRET_MUZZLE_U = 0.64;
+export const TURRET_MUZZLE_V = 0.18;
 
 // Spear
 export const SPEAR_SPEED = 920;

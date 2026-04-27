@@ -16,6 +16,7 @@ export const BrowserAssetManifest = {
     [AssetIds.bubble]: 'assets/bubble-1.png',
     [AssetIds.underwaterBg]: 'assets/underwater-bg.png',
     [AssetIds.playerCat]: 'assets/player-cat.png',
+    [AssetIds.playerTurret]: 'assets/player-turret.png',
     [AssetIds.boatBg]: 'assets/boat-bg.png',
     [AssetIds.boatSprite]: 'assets/boat-sprite.png',
     [AssetIds.upSpeargun1]: 'assets/up-speargun-1.png',
