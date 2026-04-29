@@ -279,7 +279,7 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
   renderer.drawRoundRectAlpha(Boat.shellRim, 0.4, M + 1, PANEL_Y + 1, contentW - 2, 3, 2);
   renderer.drawRoundRectAlpha('rgba(80, 220, 200, 0.06)', 1, M + 5, PANEL_Y + 5, contentW - 10, 36, 18);
 
-  renderer.drawText('FISHERCAT', 0, HEADER_TITLE_Y, CANVAS_WIDTH, 50, td(48, C.white, 'center'));
+  renderer.drawText('GRUMPIEST CATCH', 0, HEADER_TITLE_Y, CANVAS_WIDTH, 50, td(48, C.white, 'center'));
 
   // Stats — one card, aligned to inner column
   renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, innerX, STATS_Y, innerW, STATS_H, 16);

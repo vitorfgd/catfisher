@@ -1,6 +1,6 @@
 // @GUARD: Browser only — not imported from core/
 
-const FTUE_DIVE_KEY = 'fishercat_ftue_dive_done';
+const FTUE_DIVE_KEY = 'grumpiest_catch_ftue_dive_done';
 
 export function isFtueDivePendingInStorage(): boolean {
   try {
