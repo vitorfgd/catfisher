@@ -108,13 +108,13 @@ import {
 const FTUE_SHOWCASE_FISH_SCALE = 1.58;
 
 /**
- * Cluster above the turret; [0] = hand + tap target.
- * Y is fixed in screen space (layout tuned when player stood on the pedestal; turret is bottom-fixed).
+ * Cluster above the bottom-fixed turret; [0] = hand + tap target.
+ * Kept low enough for the starting spear range to reach every showcase fish.
  */
 const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
-  { x: PLAYER_X - 96, y: 362, type: FishType.Small },
-  { x: PLAYER_X + 108, y: 364, type: FishType.Small },
-  { x: PLAYER_X - 4, y: 292, type: FishType.Medium },
+  { x: PLAYER_X - 96, y: 432, type: FishType.Small },
+  { x: PLAYER_X + 108, y: 434, type: FishType.Small },
+  { x: PLAYER_X - 4, y: 362, type: FishType.Medium },
 ];
 
 /**
