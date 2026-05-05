@@ -67,11 +67,17 @@ export const REELED_FISH_SCALE_END = 1.42;
 export const WAVE_NEAR_SPAWN_FRACTION = 0;
 export const RARE_FISH_MIN_SESSION_TIME = 6;
 
-// Ocean dive / breach transition (total ≈ 1.0–1.4s)
-export const OCEAN_TRANSITION_MOVE_SEC = 0.86;
-export const OCEAN_TRANSITION_FADE_SEC = 0.34;
-export const OCEAN_TRANSITION_MENU_FADE_SEC = 0.16;
-export const OCEAN_TRANSITION_TOTAL_SEC = OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_FADE_SEC;
+// Ocean dive / breach transition (durations scaled ~1.5× from original ~1.0–1.4s + preface / boat reveal)
+export const OCEAN_TRANSITION_MOVE_SEC = 1.29;
+export const OCEAN_TRANSITION_FADE_SEC = 0.51;
+/** Dive: boat backdrop fades in while the ocean strip is still at rest (before parent rises). */
+export const OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC = 0.21;
+/** Breach: fade full boat screen in before switching to `Boat` phase (replaces transition boat layer). */
+export const OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC = 0.33;
+export const OCEAN_DIVE_TOTAL_SEC =
+  OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC + OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_FADE_SEC;
+export const OCEAN_BREACH_TOTAL_SEC =
+  OCEAN_TRANSITION_FADE_SEC + OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC;
 /** Spawn ~8 bubbles at this fraction through the move segment (dive and breach). */
 export const OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE = 0.33;
 export const OCEAN_TRANSITION_BUBBLE_COUNT = 8;
@@ -149,6 +155,12 @@ export const SHARK_ATTACK_DAMAGE = 7;    // time (seconds) lost per bite
 export const SHARK_ATTACK_CHARGE_SPEED = 285; // px/s toward the first-person anchor
 export const SHARK_ATTACK_GROW_SEC = 2.35;    // visual charge scale-up duration
 export const SHARK_BITE_FLASH_DECAY = 4.8;    // red overlay fade speed after a bite
+/** Full-screen teeth VFX when a shark bite lands (`elapsed` in game state; -1 = idle). */
+export const SHARK_BITE_VFX_TOTAL_SEC = 1.12;
+/** Split jaws rush toward center; keep under 0.5s. */
+export const SHARK_BITE_VFX_APPROACH_SEC = 0.38;
+/** Clamped mouth jitters before fading for the remainder of `SHARK_BITE_VFX_TOTAL_SEC`. */
+export const SHARK_BITE_VFX_CLAMP_JITTER_SEC = 0.24;
 export const SHARK_MAX_ALIVE = 1;
 
 // Pufferfish reward

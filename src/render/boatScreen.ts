@@ -254,17 +254,10 @@ export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
   renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
-/**
- * Main-menu chrome (stats, upgrades, dive, title). Not drawn during ocean dive-in once faded.
- * @param menuAlpha 0–1 multiplied into all draws via `pushOpacity`.
- */
-export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState, menuAlpha: number): void {
-  const useOpacity = menuAlpha < 0.999;
-  if (useOpacity) renderer.pushOpacity(menuAlpha);
-
+/** Main-menu chrome (stats, upgrades, dive, title). */
+export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void {
   if (state.upgradePanelOpen !== null) {
     drawUpgradePanel(renderer, state, state.upgradePanelOpen);
-    if (useOpacity) renderer.popOpacity();
     return;
   }
 
@@ -385,11 +378,9 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState, menuA
 
   const titleX = (CANVAS_WIDTH - titleSz.drawW) / 2;
   renderer.drawImage({ id: AssetIds.titleLogo }, titleX, BOAT_TITLE_LOGO_TOP, titleSz.drawW, titleSz.drawH);
-
-  if (useOpacity) renderer.popOpacity();
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
   drawBoatBackgroundOnly(renderer);
-  drawBoatMenuUi(renderer, state, 1);
+  drawBoatMenuUi(renderer, state);
 }

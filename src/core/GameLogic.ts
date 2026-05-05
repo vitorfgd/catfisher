@@ -28,12 +28,14 @@ import {
   CANVAS_HEIGHT,
   OCEAN_BUBBLE_FADE_IN_SEC,
   OCEAN_BUBBLE_RISE_SPEED,
+  OCEAN_BREACH_TOTAL_SEC,
+  OCEAN_DIVE_TOTAL_SEC,
+  OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC,
   OCEAN_TRANSITION_BUBBLE_COUNT,
   OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE,
   OCEAN_TRANSITION_FADE_SEC,
-  OCEAN_TRANSITION_MENU_FADE_SEC,
   OCEAN_TRANSITION_MOVE_SEC,
-  OCEAN_TRANSITION_TOTAL_SEC,
+  OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC,
   OCEAN_SURFACE_DRAW_H,
   OCEAN_SURFACE_NATURAL_H,
   OCEAN_SURFACE_NATURAL_W,
@@ -70,6 +72,7 @@ import {
   SHARK_ATTACK_GROW_SEC,
   SHARK_ATTACK_RANGE,
   SHARK_BITE_FLASH_DECAY,
+  SHARK_BITE_VFX_TOTAL_SEC,
   SHARK_MAX_ALIVE,
   TREASURE_SPAWN_INTERVAL,
   UPGRADE_MAX_LEVEL,
@@ -281,6 +284,7 @@ export function createInitialState(): FullGameState {
     shakeY: 0,
     catchFlash: 0,
     sharkBiteFlash: 0,
+    sharkBiteTeethElapsed: -1,
     diveTimer: 0,
     breachTimer: 0,
     oceanBubbles: [],
@@ -317,6 +321,7 @@ function resetForNewDive(state: FullGameState): void {
   state.shakeY = 0;
   state.catchFlash = 0;
   state.sharkBiteFlash = 0;
+  state.sharkBiteTeethElapsed = -1;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
 }
@@ -346,6 +351,7 @@ function finalizeRunToBoat(state: FullGameState): void {
   state.shakeY = 0;
   state.catchFlash = 0;
   state.sharkBiteFlash = 0;
+  state.sharkBiteTeethElapsed = -1;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
   state.pendingEvents.push({
@@ -441,15 +447,16 @@ function updateDiving(state: FullGameState, dt: number): void {
   const rng = getGameRng();
   state.diveTimer += dt;
   const t = state.diveTimer;
+  const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
   const MOVE = OCEAN_TRANSITION_MOVE_SEC;
 
-  if (t >= MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE && !state.oceanBubblesSpawned) {
+  if (t >= P + MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE && !state.oceanBubblesSpawned) {
     spawnOceanBubbles(state, rng);
   }
   updateOceanBubblesCore(state, dt);
 
-  if (t >= OCEAN_TRANSITION_TOTAL_SEC) {
-    state.diveTimer = OCEAN_TRANSITION_TOTAL_SEC;
+  if (t >= OCEAN_DIVE_TOTAL_SEC) {
+    state.diveTimer = OCEAN_DIVE_TOTAL_SEC;
     state.phase = GamePhase.Action;
     state.oceanBubbles = [];
   }
@@ -472,8 +479,8 @@ function updateBreaching(state: FullGameState, dt: number): void {
   }
   updateOceanBubblesCore(state, dt);
 
-  if (t >= OCEAN_TRANSITION_TOTAL_SEC) {
-    state.breachTimer = OCEAN_TRANSITION_TOTAL_SEC;
+  if (t >= OCEAN_BREACH_TOTAL_SEC) {
+    state.breachTimer = OCEAN_BREACH_TOTAL_SEC;
     state.oceanBubbles = [];
     finalizeRunToBoat(state);
   }
@@ -799,6 +806,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       fish.hasAttacked = true;
       fish.hitFlash = 1.0;
       state.sharkBiteFlash = 1;
+      state.sharkBiteTeethElapsed = 0;
       state.roundTimeLeft = Math.max(0, state.roundTimeLeft - SHARK_ATTACK_DAMAGE);
       state.shakeIntensity += 5.5;
       emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
@@ -1002,10 +1010,61 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       updateAction(state, dt, commands);
       break;
   }
+
+  if (state.sharkBiteTeethElapsed >= 0) {
+    state.sharkBiteTeethElapsed += dt;
+    if (state.sharkBiteTeethElapsed >= SHARK_BITE_VFX_TOTAL_SEC) {
+      state.sharkBiteTeethElapsed = -1;
+    }
+  }
 }
 
 function bubbleFadeInAlpha(b: { age: number }): number {
   return Math.min(1, b.age / OCEAN_BUBBLE_FADE_IN_SEC);
+}
+
+function getBreachBoatRevealAlpha(state: FullGameState): number {
+  if (state.phase !== GamePhase.Breaching) return 0;
+  const t = state.breachTimer;
+  const F = OCEAN_TRANSITION_FADE_SEC;
+  const M = OCEAN_TRANSITION_MOVE_SEC;
+  const R = OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC;
+  if (t <= F + M) return 0;
+  return smooth01((t - F - M) / R);
+}
+
+function buildTransitionBackdropAlphas(state: FullGameState): { boat: number; underwater: number } | null {
+  if (state.phase === GamePhase.Diving) {
+    const t = state.diveTimer;
+    const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
+    const M = OCEAN_TRANSITION_MOVE_SEC;
+    if (t < P) {
+      return { boat: smooth01(t / P), underwater: 0 };
+    }
+    if (t < P + M) {
+      const rt = (t - P) / M;
+      if (rt < 0.5) return { boat: 1, underwater: 0 };
+      const u = smooth01((rt - 0.5) / 0.5);
+      return { boat: 1 - u, underwater: u };
+    }
+    return { boat: 0, underwater: 1 };
+  }
+  if (state.phase === GamePhase.Breaching) {
+    const t = state.breachTimer;
+    const F = OCEAN_TRANSITION_FADE_SEC;
+    const M = OCEAN_TRANSITION_MOVE_SEC;
+    if (t > F + M) return null;
+    if (t <= F) {
+      return { boat: 0, underwater: 1 };
+    }
+    const mt = (t - F) / M;
+    if (mt < 0.5) {
+      return { boat: 0, underwater: 1 };
+    }
+    const u = smooth01((mt - 0.5) / 0.5);
+    return { boat: u, underwater: 1 - u };
+  }
+  return null;
 }
 
 function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | null {
@@ -1015,6 +1074,7 @@ function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | n
   const { yStart, yEnd } = diveParentYEndpoints();
   const MOVE = OCEAN_TRANSITION_MOVE_SEC;
   const FADE = OCEAN_TRANSITION_FADE_SEC;
+  const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
 
   let parentY: number;
   let surfaceScrollX: number;
@@ -1022,19 +1082,25 @@ function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | n
 
   if (state.phase === GamePhase.Diving) {
     const t = state.diveTimer;
-    if (t <= MOVE) {
-      const u = smooth01(t / MOVE);
+    if (t < P) {
+      parentY = yStart;
+      surfaceScrollX = 0;
+      groupAlpha = 1;
+    } else if (t <= P + MOVE) {
+      const rt = (t - P) / MOVE;
+      const u = smooth01(rt);
       parentY = yStart + (yEnd - yStart) * u;
-      surfaceScrollX = -scrollRange * (t / MOVE);
+      surfaceScrollX = -scrollRange * rt;
       groupAlpha = 1;
     } else {
-      const uFade = (t - MOVE) / FADE;
+      const uFade = (t - P - MOVE) / FADE;
       parentY = yEnd;
       surfaceScrollX = -scrollRange;
       groupAlpha = 1 - easeOutCubic(smooth01(uFade));
     }
   } else {
     const t = state.breachTimer;
+    if (t > FADE + MOVE) return null;
     if (t <= FADE) {
       const uFade = t / FADE;
       parentY = yEnd;
@@ -1181,20 +1247,18 @@ export function getRenderState(state: FullGameState): RenderState {
     baitX: state.baitX,
     baitY: state.baitY,
     baitFraction: state.baitActive ? state.baitTimer / BAIT_DURATION : 0,
-    boatMenuOpacity:
-      state.phase === GamePhase.Diving
-        ? 1 - smooth01(Math.min(1, state.diveTimer / OCEAN_TRANSITION_MENU_FADE_SEC))
-        : 1,
-    hudOpacity:
-      state.phase === GamePhase.Breaching
-        ? 1 - smooth01(Math.min(1, state.breachTimer / OCEAN_TRANSITION_MENU_FADE_SEC))
-        : 1,
     oceanTransition: buildOceanTransitionDraw(state),
+    transitionBackdrop: buildTransitionBackdropAlphas(state),
+    breachShowBoatRevealOnly:
+      state.phase === GamePhase.Breaching
+      && state.breachTimer >= OCEAN_TRANSITION_FADE_SEC + OCEAN_TRANSITION_MOVE_SEC,
+    breachBoatRevealAlpha: getBreachBoatRevealAlpha(state),
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
     catchFlash: state.catchFlash,
     sharkBiteFlash: state.sharkBiteFlash,
+    sharkBiteTeethElapsed: state.sharkBiteTeethElapsed,
     hudConsumableFlash: { ...state.hudConsumableFlash },
     treasureCinematic: (() => {
       const tr = state.treasureReveal;

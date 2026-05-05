@@ -8,6 +8,7 @@ This project follows a **core + `GameRenderer` + platform** split so the HTML5 s
 | `BrowserGameLoop` (`rAF`, `update`, `drainEvents`) | world update + late update hooks |
 | `BrowserInputAdapter` (pointer → `GameInputCommand`) | focus / interaction system |
 | `Canvas2DRenderer` (implements `GameRenderer`) | `DrawingCommandsBuilder` (same draw ops) |
+| `pushClipRect` / `popClip` (axis-aligned clip stack) | Equivalent scissor / clip rect in the MHS draw builder |
 | `loadImages` + `AssetManifest` | `TextureAsset` / static Studio paths; map from [`AssetIds`](../src/shared/AssetIds.ts) |
 | `BrowserAudioAdapter` (`drainEvents` / `GameEvent`) | `SoundComponent` or Studio audio |
 | `FtueStorage` (`localStorage`) | platform persistence of your choice |

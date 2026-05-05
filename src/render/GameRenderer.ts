@@ -34,6 +34,13 @@ export interface GameRenderer {
   pushOpacity(alpha: number): void;
   popOpacity(): void;
 
+  /**
+   * Intersects the clip region with an axis-aligned rectangle (nestable).
+   * Pair with `popClip` like `pushTranslate` / `pop`.
+   */
+  pushClipRect(x: number, y: number, width: number, height: number): void;
+  popClip(): void;
+
   drawRect(color: string, x: number, y: number, width: number, height: number): void;
   drawRectAlpha(color: string, alpha: number, x: number, y: number, width: number, height: number): void;
   drawRoundRect(color: string, x: number, y: number, width: number, height: number, radius: number): void;

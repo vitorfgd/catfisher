@@ -42,10 +42,6 @@ export function getHudMoneyLayout(moneyDigits: string): {
 }
 
 export function drawHud(renderer: GameRenderer, state: RenderState): void {
-  const hudA = state.hudOpacity ?? 1;
-  const useOpacity = hudA < 0.999;
-  if (useOpacity) renderer.pushOpacity(hudA);
-
   const W = CANVAS_WIDTH;
 
   const ms = `${state.hudMoneyDisplay}`;
@@ -180,6 +176,4 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
   renderer.drawRoundRect(barColor, barX, oxyBarY, Math.max(10, barW * tFrac), oxyBarH, 10);
   renderer.drawRoundRectAlpha(barColor, 0.22, barX, oxyBarY, Math.max(10, barW * tFrac), oxyBarH, 10);
   renderer.drawText(`${secLeft}s`, W - 52, oxyBarY, 50, oxyBarH, t(16, C.muted, 'right', '600'));
-
-  if (useOpacity) renderer.popOpacity();
 }

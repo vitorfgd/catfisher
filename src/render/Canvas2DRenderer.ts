@@ -47,6 +47,17 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.restore();
   }
 
+  pushClipRect(x: number, y: number, width: number, height: number): void {
+    this.ctx.save();
+    this.ctx.beginPath();
+    this.ctx.rect(x, y, width, height);
+    this.ctx.clip();
+  }
+
+  popClip(): void {
+    this.ctx.restore();
+  }
+
   drawRect(color: string, x: number, y: number, width: number, height: number): void {
     this.ctx.fillStyle = color;
     this.ctx.fillRect(x, y, width, height);

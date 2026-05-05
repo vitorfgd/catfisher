@@ -5,12 +5,15 @@ import {
   BAIT_LURE_ICON_PX,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  SHARK_BITE_VFX_APPROACH_SEC,
+  SHARK_BITE_VFX_CLAMP_JITTER_SEC,
+  SHARK_BITE_VFX_TOTAL_SEC,
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
 import { getTurretMuzzleWorld } from '../core/SpearSystem';
 import { AssetIds } from '../shared/AssetIds';
-import { drawBoatBackgroundOnly, drawBoatMenuUi, drawBoatScreen } from './boatScreen';
-import { drawOceanTransition } from './oceanTransition';
+import { drawBoatMenuUi, drawBoatScreen } from './boatScreen';
+import { drawOceanTransition, type OceanTransitionDraw } from './oceanTransition';
 import { drawHud, getHudMoneyLayout } from './hud';
 import { C, t, td, tb } from './theme';
 import { actionViewFocus, getActionViewZoomForSession } from '../core/ActionViewTransform';
@@ -63,6 +66,61 @@ const FISH_ASPECT_RATIO: Record<FishType, number> = {
 
 function drawBackground(renderer: GameRenderer): void {
   renderer.drawImage({ id: AssetIds.underwaterBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+/** Horizontal seam in screen space: boat-bg only for y < splitY, underwater only for y > splitY. */
+function dualBackdropSplitY(ocean: OceanTransitionDraw | null | undefined): number | null {
+  if (ocean == null) return null;
+  const y = ocean.parentY + ocean.surfaceDrawH * 0.5;
+  return Math.max(0, Math.min(CANVAS_HEIGHT, y));
+}
+
+function drawDualSceneBackdrop(
+  renderer: GameRenderer,
+  backdrop: { boat: number; underwater: number },
+  ocean: OceanTransitionDraw | null | undefined,
+): void {
+  const splitY = dualBackdropSplitY(ocean);
+  const W = CANVAS_WIDTH;
+  const H = CANVAS_HEIGHT;
+
+  if (splitY == null) {
+    if (backdrop.underwater > 0.002) {
+      renderer.drawImageAlpha(
+        { id: AssetIds.underwaterBg },
+        0,
+        0,
+        W,
+        H,
+        backdrop.underwater,
+      );
+    }
+    if (backdrop.boat > 0.002) {
+      renderer.drawImageAlpha({ id: AssetIds.boatBg }, 0, 0, W, H, backdrop.boat);
+    }
+    return;
+  }
+
+  const belowH = H - splitY;
+  if (backdrop.underwater > 0.002 && belowH > 0.5) {
+    renderer.pushClipRect(0, splitY, W, belowH);
+    renderer.drawImageAlpha(
+      { id: AssetIds.underwaterBg },
+      0,
+      0,
+      W,
+      H,
+      backdrop.underwater,
+    );
+    renderer.popClip();
+  }
+
+  const aboveH = splitY;
+  if (backdrop.boat > 0.002 && aboveH > 0.5) {
+    renderer.pushClipRect(0, 0, W, aboveH);
+    renderer.drawImageAlpha({ id: AssetIds.boatBg }, 0, 0, W, H, backdrop.boat);
+    renderer.popClip();
+  }
 }
 
 function drawFishSprite(
@@ -423,7 +481,15 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
     renderer.pushScale(z, z, zf.x, zf.y);
   }
 
-  drawBackground(renderer);
+  const useBaseUnderwaterOnly =
+    state.phase === GamePhase.Breaching && state.transitionBackdrop != null;
+  if (useBaseUnderwaterOnly) {
+    drawBackground(renderer);
+  } else if (state.transitionBackdrop != null) {
+    drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+  } else {
+    drawBackground(renderer);
+  }
 
   if (state.baitActive) {
     const s = BAIT_LURE_ICON_PX;
@@ -466,23 +532,111 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   renderer.pop();
 }
 
-function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): void {
-  const actionOrBreach = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
-  if (actionOrBreach && state.catchFlash > 0) {
-    const f = state.catchFlash;
-    renderer.drawRectAlpha('#fff4e0', f * 0.38, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    renderer.drawRectAlpha('#8cf0ff', f * 0.06, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+function drawCatchFlashOverlay(renderer: GameRenderer, state: RenderState): void {
+  const f = state.catchFlash;
+  renderer.drawRectAlpha('#fff4e0', f * 0.38, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  renderer.drawRectAlpha('#8cf0ff', f * 0.06, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+function drawSharkBiteFlashOverlay(renderer: GameRenderer, state: RenderState): void {
+  const f = state.sharkBiteFlash;
+  renderer.drawRectAlpha('#ff1717', f * 0.34, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  renderer.drawRectAlpha('#2a0000', f * 0.14, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+/** Natural pixel size of bite art (for aspect-correct scaling). */
+const SHARK_BITE_TOP_NATURAL_W = 1104;
+const SHARK_BITE_TOP_NATURAL_H = 511;
+const SHARK_BITE_BOTTOM_NATURAL_W = 1040;
+const SHARK_BITE_BOTTOM_NATURAL_H = 425;
+const SHARK_BITE_CLAMPED_NATURAL_W = 1129;
+const SHARK_BITE_CLAMPED_NATURAL_H = 681;
+
+function sharkBiteSmoothstep01(u: number): number {
+  const t = Math.min(1, Math.max(0, u));
+  return t * t * (3 - 2 * t);
+}
+
+function drawSharkBiteTeeth(renderer: GameRenderer, elapsed: number): void {
+  const meetY = CANVAS_HEIGHT * 0.46;
+  const approach = SHARK_BITE_VFX_APPROACH_SEC;
+
+  if (elapsed < approach) {
+    const p = sharkBiteSmoothstep01(elapsed / approach);
+    const topDrawW = CANVAS_WIDTH;
+    const topDrawH = (topDrawW * SHARK_BITE_TOP_NATURAL_H) / SHARK_BITE_TOP_NATURAL_W;
+    const botDrawW = CANVAS_WIDTH;
+    const botDrawH = (botDrawW * SHARK_BITE_BOTTOM_NATURAL_H) / SHARK_BITE_BOTTOM_NATURAL_W;
+
+    const ty0 = -topDrawH * 0.78;
+    const ty1 = meetY - topDrawH;
+    const ty = ty0 + (ty1 - ty0) * p;
+
+    const by0 = CANVAS_HEIGHT - botDrawH * 0.06;
+    const by1 = meetY;
+    const by = by0 + (by1 - by0) * p;
+
+    renderer.drawImage({ id: AssetIds.vfxTeethTop }, 0, ty, topDrawW, topDrawH);
+    renderer.drawImage({ id: AssetIds.vfxTeethBottom }, 0, by, botDrawW, botDrawH);
+    return;
   }
-  if ((state.phase === GamePhase.Action && !state.ftueActive) || state.phase === GamePhase.Breaching) {
+
+  const fadeStart = approach + SHARK_BITE_VFX_CLAMP_JITTER_SEC;
+  const fadeDur = SHARK_BITE_VFX_TOTAL_SEC - fadeStart;
+  let alpha = 1;
+  if (elapsed >= fadeStart && fadeDur > 1e-6) {
+    alpha = 1 - sharkBiteSmoothstep01((elapsed - fadeStart) / fadeDur);
+  }
+  if (alpha <= 0.008) return;
+
+  const clampW = CANVAS_WIDTH * 0.94;
+  const clampH = (clampW * SHARK_BITE_CLAMPED_NATURAL_H) / SHARK_BITE_CLAMPED_NATURAL_W;
+  const cx = CANVAS_WIDTH * 0.5;
+  const cy = meetY;
+
+  const jitterFadeSec = 0.14;
+  const jitterBlend = elapsed >= fadeStart
+    ? Math.max(0, 1 - (elapsed - fadeStart) / jitterFadeSec)
+    : 1;
+  const jx = (Math.sin(elapsed * 62) * 5 + Math.sin(elapsed * 107 + 1.2) * 2.5) * jitterBlend;
+  const jy = (Math.cos(elapsed * 54 + 0.7) * 4 + Math.sin(elapsed * 88) * 2) * jitterBlend;
+
+  const xL = cx - clampW * 0.5 + jx;
+  const yT = cy - clampH * 0.5 + jy;
+
+  renderer.pushOpacity(alpha);
+  renderer.drawImage({ id: AssetIds.vfxTeethClamped }, xL, yT, clampW, clampH);
+  renderer.popOpacity();
+}
+
+function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): void {
+  const isBreach = state.phase === GamePhase.Breaching;
+  const dualOverHud = isBreach && state.transitionBackdrop != null;
+  const actionOrBreach = state.phase === GamePhase.Action || isBreach;
+
+  if (actionOrBreach && state.catchFlash > 0 && !dualOverHud) {
+    drawCatchFlashOverlay(renderer, state);
+  }
+  if ((state.phase === GamePhase.Action && !state.ftueActive) || isBreach) {
     drawHud(renderer, state);
+  }
+  if (dualOverHud && state.transitionBackdrop != null) {
+    drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+  }
+  if (actionOrBreach && state.catchFlash > 0 && dualOverHud) {
+    drawCatchFlashOverlay(renderer, state);
   }
   if (state.phase === GamePhase.Action && state.ftueActive) {
     drawFtueCtaOnly(renderer);
   }
-  if (actionOrBreach && state.sharkBiteFlash > 0) {
-    const f = state.sharkBiteFlash;
-    renderer.drawRectAlpha('#ff1717', f * 0.34, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-    renderer.drawRectAlpha('#2a0000', f * 0.14, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  if (actionOrBreach && state.sharkBiteFlash > 0 && !dualOverHud) {
+    drawSharkBiteFlashOverlay(renderer, state);
+  }
+  if (actionOrBreach && state.sharkBiteFlash > 0 && dualOverHud) {
+    drawSharkBiteFlashOverlay(renderer, state);
+  }
+  if (actionOrBreach && state.sharkBiteTeethElapsed >= 0) {
+    drawSharkBiteTeeth(renderer, state.sharkBiteTeethElapsed);
   }
   if (state.treasureCinematic != null) {
     drawTreasureCinematicOverlay(renderer, state);
@@ -499,11 +653,21 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
 
   if (state.phase === GamePhase.Diving) {
-    drawBoatBackgroundOnly(renderer);
-    drawBoatMenuUi(renderer, state, state.boatMenuOpacity);
+    drawBoatMenuUi(renderer, state);
+    if (state.transitionBackdrop != null) {
+      drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+    }
     if (state.oceanTransition != null) {
       drawOceanTransition(renderer, state.oceanTransition);
     }
+    return;
+  }
+
+  if (state.phase === GamePhase.Breaching && state.breachShowBoatRevealOnly) {
+    const a = state.breachBoatRevealAlpha;
+    if (a < 0.999) renderer.pushOpacity(a);
+    drawBoatScreen(renderer, state);
+    if (a < 0.999) renderer.popOpacity();
     return;
   }
 

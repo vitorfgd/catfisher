@@ -183,6 +183,11 @@ export interface FullGameState {
   catchFlash: number;
   /** Brief red flash when an attacking shark bites. */
   sharkBiteFlash: number;
+  /**
+   * Full-screen teeth bite VFX timer (seconds since bite landed).
+   * `-1` = idle; `0`..`SHARK_BITE_VFX_TOTAL_SEC` while animating (see Constants).
+   */
+  sharkBiteTeethElapsed: number;
 
   /** HUD consumable button pulse after use (seconds remaining). */
   hudConsumableFlash: { net: number; bait: number };

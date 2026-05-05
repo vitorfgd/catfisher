@@ -59,4 +59,9 @@ export const AssetIds = {
   vfxWaterGradient: 'vfxWaterGradient',
   /** Sprite sheet: 3 singles + 4 clusters (see `oceanTransitionBubbles` rects). */
   vfxBubbleSheet: 'vfxBubbleSheet',
+
+  /** Shark bite full-screen teeth (split → clamped). */
+  vfxTeethTop: 'vfxTeethTop',
+  vfxTeethBottom: 'vfxTeethBottom',
+  vfxTeethClamped: 'vfxTeethClamped',
 } as const;

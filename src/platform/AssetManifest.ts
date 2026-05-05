@@ -43,6 +43,9 @@ export const BrowserAssetManifest = {
     [AssetIds.vfxWaterSurface]: 'assets/vfx-water-surface.png',
     [AssetIds.vfxWaterGradient]: 'assets/vfx-water-gradient.png',
     [AssetIds.vfxBubbleSheet]: 'assets/vfx-bubble-sheet.png',
+    [AssetIds.vfxTeethTop]: 'assets/vfx-teeth-top.png',
+    [AssetIds.vfxTeethBottom]: 'assets/vfx-teeth-bottom.png',
+    [AssetIds.vfxTeethClamped]: 'assets/vfx-teeth-clamped.png',
   },
   sounds: {} as Record<string, string>,
 } as const;

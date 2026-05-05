@@ -88,17 +88,25 @@ export interface RenderState {
   baitFraction: number;  // 1 = fresh, 0 = expired
 
   // Transition / scene chrome
-  /** Boat menu + title opacity during `Diving` (fades out at transition start). */
-  boatMenuOpacity: number;
-  /** HUD opacity during `Breaching` (fades out at transition start). */
-  hudOpacity: number;
   /** Populated while `Diving` or `Breaching`; otherwise null. */
   oceanTransition: OceanTransitionDraw | null;
+
+  /**
+   * Full-screen `boat-bg` / `underwater-bg` alphas under the ocean VFX (and under in-game world during breach).
+   * Null during breach boat-reveal tail (see `breachBoatRevealAlpha`).
+   */
+  transitionBackdrop: { boat: number; underwater: number } | null;
+  /** True once breach ocean move has finished (`breachTimer` ≥ fade + move). */
+  breachShowBoatRevealOnly: boolean;
+  /** Breach end: 0 = start of boat reveal; 1 = full `drawBoatScreen` before phase flip. */
+  breachBoatRevealAlpha: number;
 
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;
   /** Brief red flash when a charging shark bites (0 = off) */
   sharkBiteFlash: number;
+  /** Shark bite teeth overlay; `-1` = off (see `FullGameState.sharkBiteTeethElapsed`). */
+  sharkBiteTeethElapsed: number;
 
   /** Pulse timer after using net/bait on the dive HUD (seconds). */
   hudConsumableFlash: { net: number; bait: number };
