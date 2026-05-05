@@ -67,8 +67,22 @@ export const REELED_FISH_SCALE_END = 1.42;
 export const WAVE_NEAR_SPAWN_FRACTION = 0;
 export const RARE_FISH_MIN_SESSION_TIME = 6;
 
-// Dive transition
-export const DIVE_DURATION = 0.45; // seconds
+// Ocean dive / breach transition (total ≈ 1.0–1.4s)
+export const OCEAN_TRANSITION_MOVE_SEC = 0.86;
+export const OCEAN_TRANSITION_FADE_SEC = 0.34;
+export const OCEAN_TRANSITION_MENU_FADE_SEC = 0.16;
+export const OCEAN_TRANSITION_TOTAL_SEC = OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_FADE_SEC;
+/** Spawn ~8 bubbles at this fraction through the move segment (dive and breach). */
+export const OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE = 0.33;
+export const OCEAN_TRANSITION_BUBBLE_COUNT = 8;
+/** Upward drift in parent-local space (px/s). */
+export const OCEAN_BUBBLE_RISE_SPEED = 88;
+export const OCEAN_BUBBLE_FADE_IN_SEC = 0.22;
+/** Draw height for `vfx-water-surface.png` strip; width follows texture aspect. */
+export const OCEAN_SURFACE_DRAW_H = 116;
+/** Natural size of `vfx-water-surface.png` (for scroll math without DOM reads). */
+export const OCEAN_SURFACE_NATURAL_W = 2172;
+export const OCEAN_SURFACE_NATURAL_H = 138;
 
 // Upgrade costs per level (index = target level - 2, so [0] = cost to reach lvl2)
 // Design: ~one meaningful purchase per full dive early on; mid tier needs several dives banked;

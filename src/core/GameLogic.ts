@@ -11,6 +11,7 @@ import {
 export type { GameEvent } from './Types';
 
 import type { GameInputCommand } from '../shared/InputCommands';
+import type { OceanTransitionDraw } from '../render/oceanTransition';
 import type { RenderState } from '../render/RenderState';
 
 import { getGameRng } from './GameRng';
@@ -25,7 +26,17 @@ import {
   BAIT_SCHOOL_FISH_COUNT,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  DIVE_DURATION,
+  OCEAN_BUBBLE_FADE_IN_SEC,
+  OCEAN_BUBBLE_RISE_SPEED,
+  OCEAN_TRANSITION_BUBBLE_COUNT,
+  OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE,
+  OCEAN_TRANSITION_FADE_SEC,
+  OCEAN_TRANSITION_MENU_FADE_SEC,
+  OCEAN_TRANSITION_MOVE_SEC,
+  OCEAN_TRANSITION_TOTAL_SEC,
+  OCEAN_SURFACE_DRAW_H,
+  OCEAN_SURFACE_NATURAL_H,
+  OCEAN_SURFACE_NATURAL_W,
   TREASURE_REVEAL_AWARD_AT_SEC,
   TREASURE_REVEAL_DURATION_SEC,
   TREASURE_MONEY_LERP_SEC,
@@ -120,6 +131,51 @@ function decayHudConsumableFlash(state: FullGameState, dt: number): void {
   state.hudConsumableFlash.bait = Math.max(0, state.hudConsumableFlash.bait - dt);
 }
 
+function smooth01(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return u * u * (3 - 2 * u);
+}
+
+function easeOutCubic(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return 1 - (1 - u) ** 3;
+}
+
+function oceanSurfaceLayout(): { surfaceDrawH: number; surfaceDrawW: number; scrollRange: number } {
+  const surfaceDrawH = OCEAN_SURFACE_DRAW_H;
+  const surfaceDrawW = (OCEAN_SURFACE_NATURAL_W / OCEAN_SURFACE_NATURAL_H) * surfaceDrawH;
+  return { surfaceDrawH, surfaceDrawW, scrollRange: Math.max(0, surfaceDrawW - CANVAS_WIDTH) };
+}
+
+function diveParentYEndpoints(): { yStart: number; yEnd: number } {
+  const { surfaceDrawH } = oceanSurfaceLayout();
+  return {
+    yStart: CANVAS_HEIGHT + surfaceDrawH + 24,
+    yEnd: -surfaceDrawH - 28,
+  };
+}
+
+function spawnOceanBubbles(state: FullGameState, rng: Rng): void {
+  state.oceanBubblesSpawned = true;
+  const { surfaceDrawH } = oceanSurfaceLayout();
+  for (let i = 0; i < OCEAN_TRANSITION_BUBBLE_COUNT; i += 1) {
+    state.oceanBubbles.push({
+      lx: rng.between(24, CANVAS_WIDTH - 24),
+      ly: rng.between(surfaceDrawH + 36, Math.min(CANVAS_HEIGHT * 0.96, CANVAS_HEIGHT - 40)),
+      variant: Math.floor(rng.next() * 7),
+      age: 0,
+    });
+  }
+}
+
+function updateOceanBubblesCore(state: FullGameState, dt: number): void {
+  for (const b of state.oceanBubbles) {
+    b.age += dt;
+    b.ly -= OCEAN_BUBBLE_RISE_SPEED * dt;
+  }
+  state.oceanBubbles = state.oceanBubbles.filter((b) => b.ly > -160);
+}
+
 /**
  * Cluster above the bottom-fixed turret; [0] = hand + tap target.
  * Kept low enough for the starting spear range to reach every showcase fish.
@@ -137,7 +193,7 @@ const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }
 export function bootstrapActionFtueDive(state: FullGameState): void {
   state.ftueActive = true;
   state.phase = GamePhase.Action;
-  state.diveTimer = DIVE_DURATION;
+  state.diveTimer = 0;
   resetForNewDive(state);
   state.fish = [];
   let id = state.nextFishId;
@@ -226,6 +282,9 @@ export function createInitialState(): FullGameState {
     catchFlash: 0,
     sharkBiteFlash: 0,
     diveTimer: 0,
+    breachTimer: 0,
+    oceanBubbles: [],
+    oceanBubblesSpawned: false,
     pendingEvents: [],
     hudConsumableFlash: { net: 0, bait: 0 },
   };
@@ -262,7 +321,15 @@ function resetForNewDive(state: FullGameState): void {
   state.hudConsumableFlash = { net: 0, bait: 0 };
 }
 
-function finishRun(state: FullGameState): void {
+function beginBreaching(state: FullGameState): void {
+  state.roundTimeLeft = 0;
+  state.phase = GamePhase.Breaching;
+  state.breachTimer = 0;
+  state.oceanBubbles = [];
+  state.oceanBubblesSpawned = false;
+}
+
+function finalizeRunToBoat(state: FullGameState): void {
   state.phase = GamePhase.Boat;
   state.lastRunEarnings = state.sessionEarnings;
   state.lastRunDurationSec = state.sessionTime;
@@ -294,6 +361,8 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
       state.upgradePanelOpen = null;
       state.phase = GamePhase.Diving;
       state.diveTimer = 0;
+      state.oceanBubbles = [];
+      state.oceanBubblesSpawned = false;
       resetForNewDive(state);
       state.pendingEvents.push({ type: 'diveStarted' });
       continue;
@@ -369,10 +438,44 @@ function updateTreasureReveal(state: FullGameState, dt: number, r: Rng): void {
 }
 
 function updateDiving(state: FullGameState, dt: number): void {
+  const rng = getGameRng();
   state.diveTimer += dt;
-  if (state.diveTimer >= DIVE_DURATION) {
-    state.diveTimer = DIVE_DURATION;
+  const t = state.diveTimer;
+  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
+
+  if (t >= MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE && !state.oceanBubblesSpawned) {
+    spawnOceanBubbles(state, rng);
+  }
+  updateOceanBubblesCore(state, dt);
+
+  if (t >= OCEAN_TRANSITION_TOTAL_SEC) {
+    state.diveTimer = OCEAN_TRANSITION_TOTAL_SEC;
     state.phase = GamePhase.Action;
+    state.oceanBubbles = [];
+  }
+}
+
+function updateBreaching(state: FullGameState, dt: number): void {
+  const rng = getGameRng();
+  state.breachTimer += dt;
+  const t = state.breachTimer;
+  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
+  const FADE = OCEAN_TRANSITION_FADE_SEC;
+  const moveElapsed = t - FADE;
+
+  if (
+    moveElapsed >= MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE
+    && !state.oceanBubblesSpawned
+    && moveElapsed > 0
+  ) {
+    spawnOceanBubbles(state, rng);
+  }
+  updateOceanBubblesCore(state, dt);
+
+  if (t >= OCEAN_TRANSITION_TOTAL_SEC) {
+    state.breachTimer = OCEAN_TRANSITION_TOTAL_SEC;
+    state.oceanBubbles = [];
+    finalizeRunToBoat(state);
   }
 }
 
@@ -880,7 +983,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   state.shakeY = state.shakeIntensity > 0 ? (rng.next() - 0.5) * state.shakeIntensity : 0;
 
   if (state.roundTimeLeft <= 0) {
-    finishRun(state);
+    beginBreaching(state);
   }
 }
 
@@ -892,15 +995,78 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
     case GamePhase.Diving:
       updateDiving(state, dt);
       break;
+    case GamePhase.Breaching:
+      updateBreaching(state, dt);
+      break;
     case GamePhase.Action:
       updateAction(state, dt, commands);
       break;
   }
 }
 
+function bubbleFadeInAlpha(b: { age: number }): number {
+  return Math.min(1, b.age / OCEAN_BUBBLE_FADE_IN_SEC);
+}
+
+function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | null {
+  if (state.phase !== GamePhase.Diving && state.phase !== GamePhase.Breaching) return null;
+
+  const { surfaceDrawH, surfaceDrawW, scrollRange } = oceanSurfaceLayout();
+  const { yStart, yEnd } = diveParentYEndpoints();
+  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
+  const FADE = OCEAN_TRANSITION_FADE_SEC;
+
+  let parentY: number;
+  let surfaceScrollX: number;
+  let groupAlpha: number;
+
+  if (state.phase === GamePhase.Diving) {
+    const t = state.diveTimer;
+    if (t <= MOVE) {
+      const u = smooth01(t / MOVE);
+      parentY = yStart + (yEnd - yStart) * u;
+      surfaceScrollX = -scrollRange * (t / MOVE);
+      groupAlpha = 1;
+    } else {
+      const uFade = (t - MOVE) / FADE;
+      parentY = yEnd;
+      surfaceScrollX = -scrollRange;
+      groupAlpha = 1 - easeOutCubic(smooth01(uFade));
+    }
+  } else {
+    const t = state.breachTimer;
+    if (t <= FADE) {
+      const uFade = t / FADE;
+      parentY = yEnd;
+      surfaceScrollX = -scrollRange;
+      groupAlpha = easeOutCubic(smooth01(uFade));
+    } else {
+      const tm = t - FADE;
+      const u = smooth01(tm / MOVE);
+      parentY = yEnd + (yStart - yEnd) * u;
+      surfaceScrollX = -scrollRange * (1 - u);
+      groupAlpha = 1;
+    }
+  }
+
+  const bubbles = state.oceanBubbles.map((b) => ({
+    variant: b.variant,
+    lx: b.lx,
+    ly: b.ly,
+    alpha: bubbleFadeInAlpha(b),
+  }));
+
+  return {
+    parentY,
+    surfaceScrollX,
+    surfaceDrawH,
+    surfaceDrawW,
+    groupAlpha,
+    bubbles,
+  };
+}
+
 export function getRenderState(state: FullGameState): RenderState {
-  const isDiving = state.phase === GamePhase.Diving;
-  const diveAlpha = isDiving ? state.diveTimer / DIVE_DURATION : 1;
   const hasSpear = state.spears.length > 0;
   const carryingFish = state.spears.some((spear) => spear.caughtFishType !== null);
   const harpoonStatus = hasSpear
@@ -991,7 +1157,8 @@ export function getRenderState(state: FullGameState): RenderState {
     roundTimeLeft: ftue ? state.roundTimeMax : state.roundTimeLeft,
     roundTimeMax: state.roundTimeMax,
     timeElapsed: ftue ? 0 : state.sessionTime,
-    actionSessionTime: state.phase === GamePhase.Action ? state.sessionTime : 0,
+    actionSessionTime:
+      state.phase === GamePhase.Action || state.phase === GamePhase.Breaching ? state.sessionTime : 0,
     sessionEarnings: state.sessionEarnings,
     sessionCatchCount: state.sessionCatchCount,
     harpoonStatus,
@@ -1014,7 +1181,15 @@ export function getRenderState(state: FullGameState): RenderState {
     baitX: state.baitX,
     baitY: state.baitY,
     baitFraction: state.baitActive ? state.baitTimer / BAIT_DURATION : 0,
-    diveAlpha,
+    boatMenuOpacity:
+      state.phase === GamePhase.Diving
+        ? 1 - smooth01(Math.min(1, state.diveTimer / OCEAN_TRANSITION_MENU_FADE_SEC))
+        : 1,
+    hudOpacity:
+      state.phase === GamePhase.Breaching
+        ? 1 - smooth01(Math.min(1, state.breachTimer / OCEAN_TRANSITION_MENU_FADE_SEC))
+        : 1,
+    oceanTransition: buildOceanTransitionDraw(state),
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,

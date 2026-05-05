@@ -38,6 +38,15 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.restore();
   }
 
+  pushOpacity(alpha: number): void {
+    this.ctx.save();
+    this.ctx.globalAlpha *= alpha;
+  }
+
+  popOpacity(): void {
+    this.ctx.restore();
+  }
+
   drawRect(color: string, x: number, y: number, width: number, height: number): void {
     this.ctx.fillStyle = color;
     this.ctx.fillRect(x, y, width, height);
@@ -97,6 +106,42 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.save();
     this.ctx.globalAlpha = alpha;
     this.ctx.drawImage(img, x, y, width, height);
+    this.ctx.restore();
+  }
+
+  drawImageRegion(
+    image: DrawImageRef,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void {
+    const img = this.images[image.id];
+    if (img == null) return;
+    this.ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
+  }
+
+  drawImageRegionAlpha(
+    image: DrawImageRef,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    alpha: number,
+  ): void {
+    const img = this.images[image.id];
+    if (img == null) return;
+    this.ctx.save();
+    this.ctx.globalAlpha = alpha;
+    this.ctx.drawImage(img, sx, sy, sw, sh, dx, dy, dw, dh);
     this.ctx.restore();
   }
 

@@ -30,6 +30,10 @@ export interface GameRenderer {
   pushRotate(degrees: number, originX?: number, originY?: number): void;
   pop(): void;
 
+  /** Multiplies `globalAlpha` for subsequent draws until `popOpacity` (nestable). */
+  pushOpacity(alpha: number): void;
+  popOpacity(): void;
+
   drawRect(color: string, x: number, y: number, width: number, height: number): void;
   drawRectAlpha(color: string, alpha: number, x: number, y: number, width: number, height: number): void;
   drawRoundRect(color: string, x: number, y: number, width: number, height: number, radius: number): void;
@@ -38,6 +42,30 @@ export interface GameRenderer {
   drawEllipseAlpha(color: string, alpha: number, centerX: number, centerY: number, radiusX: number, radiusY: number): void;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
   drawImageAlpha(image: DrawImageRef, x: number, y: number, width: number, height: number, alpha: number): void;
+  /** Source rectangle in texture space (for sprite sheets). */
+  drawImageRegion(
+    image: DrawImageRef,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+  ): void;
+  drawImageRegionAlpha(
+    image: DrawImageRef,
+    sx: number,
+    sy: number,
+    sw: number,
+    sh: number,
+    dx: number,
+    dy: number,
+    dw: number,
+    dh: number,
+    alpha: number,
+  ): void;
   drawText(text: string, x: number, y: number, width: number, height: number, style: TextStyle): void;
 
   // Filled polygon (convex), points are [x0,y0, x1,y1, ...]

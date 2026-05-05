@@ -40,6 +40,9 @@ export const BrowserAssetManifest = {
     [AssetIds.iconBait]: 'assets/icon-bait.png',
     [AssetIds.iconCoin]: 'assets/icon-coin.png',
     [AssetIds.ftueHand]: 'assets/ftue-hand.png',
+    [AssetIds.vfxWaterSurface]: 'assets/vfx-water-surface.png',
+    [AssetIds.vfxWaterGradient]: 'assets/vfx-water-gradient.png',
+    [AssetIds.vfxBubbleSheet]: 'assets/vfx-bubble-sheet.png',
   },
   sounds: {} as Record<string, string>,
 } as const;

@@ -9,7 +9,8 @@ import {
 } from '../core/Constants';
 import { getTurretMuzzleWorld } from '../core/SpearSystem';
 import { AssetIds } from '../shared/AssetIds';
-import { drawBoatScreen } from './boatScreen';
+import { drawBoatBackgroundOnly, drawBoatMenuUi, drawBoatScreen } from './boatScreen';
+import { drawOceanTransition } from './oceanTransition';
 import { drawHud, getHudMoneyLayout } from './hud';
 import { C, t, td, tb } from './theme';
 import { actionViewFocus, getActionViewZoomForSession } from '../core/ActionViewTransform';
@@ -411,16 +412,9 @@ function drawFloatingTexts(renderer: GameRenderer, texts: RenderState['floatingT
   }
 }
 
-export function renderFrame(renderer: GameRenderer, state: RenderState): void {
-  renderer.clear();
-
-  if (state.phase === GamePhase.Boat) {
-    drawBoatScreen(renderer, state);
-    return;
-  }
-
+function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState): void {
+  const actionZoomed = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
   const isFtue = state.phase === GamePhase.Action && state.ftueActive;
-  const actionZoomed = state.phase === GamePhase.Action;
   const zf = actionZoomed ? actionViewFocus(state.player.x, state.player.y) : null;
   const z = getActionViewZoomForSession(state.actionSessionTime, state.ftueActive);
 
@@ -470,19 +464,22 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
     renderer.pop();
   }
   renderer.pop();
+}
 
-  if (state.phase === GamePhase.Action && state.catchFlash > 0) {
+function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): void {
+  const actionOrBreach = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
+  if (actionOrBreach && state.catchFlash > 0) {
     const f = state.catchFlash;
     renderer.drawRectAlpha('#fff4e0', f * 0.38, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     renderer.drawRectAlpha('#8cf0ff', f * 0.06, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
   }
-  if (state.phase === GamePhase.Action && !state.ftueActive) {
+  if ((state.phase === GamePhase.Action && !state.ftueActive) || state.phase === GamePhase.Breaching) {
     drawHud(renderer, state);
   }
   if (state.phase === GamePhase.Action && state.ftueActive) {
     drawFtueCtaOnly(renderer);
   }
-  if (state.phase === GamePhase.Action && state.sharkBiteFlash > 0) {
+  if (actionOrBreach && state.sharkBiteFlash > 0) {
     const f = state.sharkBiteFlash;
     renderer.drawRectAlpha('#ff1717', f * 0.34, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
     renderer.drawRectAlpha('#2a0000', f * 0.14, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -491,7 +488,29 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
     drawTreasureCinematicOverlay(renderer, state);
     drawTreasureFlyingCoins(renderer, state);
   }
-  if (state.phase === GamePhase.Diving && state.diveAlpha < 1) {
-    renderer.drawRectAlpha(C.bg, 1 - state.diveAlpha, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+export function renderFrame(renderer: GameRenderer, state: RenderState): void {
+  renderer.clear();
+
+  if (state.phase === GamePhase.Boat) {
+    drawBoatScreen(renderer, state);
+    return;
+  }
+
+  if (state.phase === GamePhase.Diving) {
+    drawBoatBackgroundOnly(renderer);
+    drawBoatMenuUi(renderer, state, state.boatMenuOpacity);
+    if (state.oceanTransition != null) {
+      drawOceanTransition(renderer, state.oceanTransition);
+    }
+    return;
+  }
+
+  drawUnderwaterPlayingField(renderer, state);
+  drawActionSurfaceOverlays(renderer, state);
+
+  if (state.phase === GamePhase.Breaching && state.oceanTransition != null) {
+    drawOceanTransition(renderer, state.oceanTransition);
   }
 }

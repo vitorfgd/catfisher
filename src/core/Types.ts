@@ -4,6 +4,15 @@ export enum GamePhase {
   Boat = 'Boat',
   Diving = 'Diving',
   Action = 'Action',
+  Breaching = 'Breaching',
+}
+
+/** Scene-transition bubbles (parent-local coordinates). */
+export interface OceanBubbleParticle {
+  lx: number;
+  ly: number;
+  variant: number;
+  age: number;
 }
 
 export enum FishType {
@@ -179,7 +188,13 @@ export interface FullGameState {
   hudConsumableFlash: { net: number; bait: number };
 
   // Transition
-  diveTimer: number; // 0 -> DIVE_DURATION during Diving phase
+  /** Elapsed seconds during `Diving` (ocean dive-in). */
+  diveTimer: number;
+  /** Elapsed seconds during `Breaching` (ocean breach-out). */
+  breachTimer: number;
+  oceanBubbles: OceanBubbleParticle[];
+  /** True after bubbles spawned for the current transition move segment. */
+  oceanBubblesSpawned: boolean;
 
   // Event queue (drained each frame by platform layer)
   pendingEvents: GameEvent[];

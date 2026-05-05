@@ -53,4 +53,10 @@ export const AssetIds = {
   iconCoin: 'iconCoin',
   /** FTUE: finger pointing at fish to tap (points right) */
   ftueHand: 'ftueHand',
+
+  /** Ocean dive/breach transition — wide surface strip (black = transparent in VFX draw). */
+  vfxWaterSurface: 'vfxWaterSurface',
+  vfxWaterGradient: 'vfxWaterGradient',
+  /** Sprite sheet: 3 singles + 4 clusters (see `oceanTransitionBubbles` rects). */
+  vfxBubbleSheet: 'vfxBubbleSheet',
 } as const;

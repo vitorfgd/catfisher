@@ -250,7 +250,24 @@ function drawSectionHeader(
   renderer.drawRectAlpha(Boat.cardLine, 0.5, x, y + H - 1, w, 1);
 }
 
-export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
+export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
+  renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+}
+
+/**
+ * Main-menu chrome (stats, upgrades, dive, title). Not drawn during ocean dive-in once faded.
+ * @param menuAlpha 0–1 multiplied into all draws via `pushOpacity`.
+ */
+export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState, menuAlpha: number): void {
+  const useOpacity = menuAlpha < 0.999;
+  if (useOpacity) renderer.pushOpacity(menuAlpha);
+
+  if (state.upgradePanelOpen !== null) {
+    drawUpgradePanel(renderer, state, state.upgradePanelOpen);
+    if (useOpacity) renderer.popOpacity();
+    return;
+  }
+
   const { shellX, shellW } = getBoatShellHorizontal();
   const { contentX, contentW, bankW, ldW, ldX } = getBoatStatsColumnLayout();
   const padX = BOAT_CONTENT_TEXT_PAD_X;
@@ -258,13 +275,6 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
   const STATS_Y = getBoatStatsCardTopY();
   const STATS_H = 86;
   const statsCard = getBoatStatsCardRect(STATS_Y, STATS_H);
-
-  renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  if (state.upgradePanelOpen !== null) {
-    drawUpgradePanel(renderer, state, state.upgradePanelOpen);
-    return;
-  }
 
   renderer.drawRectAlpha(C.bg, BOAT_MENU_SCRIM_ALPHA, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -375,4 +385,11 @@ export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void
 
   const titleX = (CANVAS_WIDTH - titleSz.drawW) / 2;
   renderer.drawImage({ id: AssetIds.titleLogo }, titleX, BOAT_TITLE_LOGO_TOP, titleSz.drawW, titleSz.drawH);
+
+  if (useOpacity) renderer.popOpacity();
+}
+
+export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
+  drawBoatBackgroundOnly(renderer);
+  drawBoatMenuUi(renderer, state, 1);
 }

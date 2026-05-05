@@ -8,6 +8,7 @@ import type {
   ParticleState,
   UpgradeState,
 } from '../core/Types';
+import type { OceanTransitionDraw } from './oceanTransition';
 
 export interface RenderPlayerState {
   x: number;
@@ -86,8 +87,13 @@ export interface RenderState {
   baitY: number;
   baitFraction: number;  // 1 = fresh, 0 = expired
 
-  // Transition
-  diveAlpha: number; // 0 = boat fully visible, 1 = fully underwater
+  // Transition / scene chrome
+  /** Boat menu + title opacity during `Diving` (fades out at transition start). */
+  boatMenuOpacity: number;
+  /** HUD opacity during `Breaching` (fades out at transition start). */
+  hudOpacity: number;
+  /** Populated while `Diving` or `Breaching`; otherwise null. */
+  oceanTransition: OceanTransitionDraw | null;
 
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;
