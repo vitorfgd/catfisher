@@ -108,6 +108,9 @@ export interface RenderState {
   /** Shark bite teeth overlay; `-1` = off (see `FullGameState.sharkBiteTeethElapsed`). */
   sharkBiteTeethElapsed: number;
 
+  /** Net consumable full-screen VFX; null when idle. */
+  netVfx: { elapsed: number } | null;
+
   /** Pulse timer after using net/bait on the dive HUD (seconds). */
   hudConsumableFlash: { net: number; bait: number };
 

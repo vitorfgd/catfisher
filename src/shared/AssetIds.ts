@@ -64,4 +64,6 @@ export const AssetIds = {
   vfxTeethTop: 'vfxTeethTop',
   vfxTeethBottom: 'vfxTeethBottom',
   vfxTeethClamped: 'vfxTeethClamped',
+  /** Full-screen net sweep when using the net consumable */
+  vfxNet: 'vfxNet',
 } as const;

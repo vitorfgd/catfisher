@@ -131,6 +131,12 @@ export type GameEvent =
   | { type: 'upgradeBought'; id: string }
   | { type: 'ftueDiveExited' };
 
+/** Full-screen net VFX after using the net consumable (catches apply at `NET_VFX_CATCH_AT_SEC`). */
+export interface NetVfxState {
+  elapsed: number;
+  catchesApplied: boolean;
+}
+
 export interface FullGameState {
   phase: GamePhase;
   money: number;
@@ -188,6 +194,9 @@ export interface FullGameState {
    * `-1` = idle; `0`..`SHARK_BITE_VFX_TOTAL_SEC` while animating (see Constants).
    */
   sharkBiteTeethElapsed: number;
+
+  /** Net throw sweep VFX; null when idle. */
+  netVfx: NetVfxState | null;
 
   /** HUD consumable button pulse after use (seconds remaining). */
   hudConsumableFlash: { net: number; bait: number };

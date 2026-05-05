@@ -5,6 +5,9 @@ import {
   BAIT_LURE_ICON_PX,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  NET_VFX_FADE_SEC,
+  NET_VFX_SLIDE_GROW_SEC,
+  NET_VFX_TOTAL_SEC,
   SHARK_BITE_VFX_APPROACH_SEC,
   SHARK_BITE_VFX_CLAMP_JITTER_SEC,
   SHARK_BITE_VFX_TOTAL_SEC,
@@ -532,6 +535,47 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   renderer.pop();
 }
 
+const VFX_NET_NATURAL_W = 1024;
+const VFX_NET_NATURAL_H = 1536;
+
+function netVfxSmoothstep01(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return u * u * (3 - 2 * u);
+}
+
+/** Screen-space net sweep: below HUD, above world (drawn after `drawUnderwaterPlayingField`). */
+function drawNetConsumableVfx(renderer: GameRenderer, elapsed: number): void {
+  if (elapsed < 0 || elapsed >= NET_VFX_TOTAL_SEC) return;
+
+  const p = netVfxSmoothstep01(Math.min(1, elapsed / NET_VFX_SLIDE_GROW_SEC));
+  const scaleCover = Math.max(CANVAS_WIDTH / VFX_NET_NATURAL_W, CANVAS_HEIGHT / VFX_NET_NATURAL_H);
+  const scaleMin = 0.2;
+  const s = scaleCover * (scaleMin + (1 - scaleMin) * p);
+  const drawW = VFX_NET_NATURAL_W * s;
+  const drawH = VFX_NET_NATURAL_H * s;
+
+  const cx = CANVAS_WIDTH * 0.5;
+  const cyStart = CANVAS_HEIGHT + drawH * 0.42;
+  const cyEnd = CANVAS_HEIGHT * 0.46;
+  const cy = cyStart + (cyEnd - cyStart) * p;
+
+  let alpha = 1;
+  if (elapsed > NET_VFX_SLIDE_GROW_SEC) {
+    const u = (elapsed - NET_VFX_SLIDE_GROW_SEC) / NET_VFX_FADE_SEC;
+    alpha = 1 - netVfxSmoothstep01(Math.min(1, Math.max(0, u)));
+  }
+  if (alpha <= 0.004) return;
+
+  renderer.drawImageAlpha(
+    { id: AssetIds.vfxNet },
+    cx - drawW * 0.5,
+    cy - drawH * 0.5,
+    drawW,
+    drawH,
+    alpha,
+  );
+}
+
 function drawCatchFlashOverlay(renderer: GameRenderer, state: RenderState): void {
   const f = state.catchFlash;
   renderer.drawRectAlpha('#fff4e0', f * 0.38, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
@@ -672,6 +716,12 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
 
   drawUnderwaterPlayingField(renderer, state);
+  if (
+    (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching)
+    && state.netVfx != null
+  ) {
+    drawNetConsumableVfx(renderer, state.netVfx.elapsed);
+  }
   drawActionSurfaceOverlays(renderer, state);
 
   if (state.phase === GamePhase.Breaching && state.oceanTransition != null) {

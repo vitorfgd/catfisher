@@ -46,6 +46,8 @@ import {
   TREASURE_REVEAL_WHITE_PEAK_SEC,
   NET_COST,
   NET_MAX_STOCK,
+  NET_VFX_CATCH_AT_SEC,
+  NET_VFX_TOTAL_SEC,
   OXYGEN_DRAIN_RATE,
   PLAYER_X,
   PLAYER_Y,
@@ -291,6 +293,7 @@ export function createInitialState(): FullGameState {
     oceanBubblesSpawned: false,
     pendingEvents: [],
     hudConsumableFlash: { net: 0, bait: 0 },
+    netVfx: null,
   };
 }
 
@@ -324,9 +327,11 @@ function resetForNewDive(state: FullGameState): void {
   state.sharkBiteTeethElapsed = -1;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
+  state.netVfx = null;
 }
 
 function beginBreaching(state: FullGameState): void {
+  clearNetVfxApplyingIfNeeded(state, getGameRng());
   state.roundTimeLeft = 0;
   state.phase = GamePhase.Breaching;
   state.breachTimer = 0;
@@ -335,6 +340,7 @@ function beginBreaching(state: FullGameState): void {
 }
 
 function finalizeRunToBoat(state: FullGameState): void {
+  clearNetVfxApplyingIfNeeded(state, getGameRng());
   state.phase = GamePhase.Boat;
   state.lastRunEarnings = state.sessionEarnings;
   state.lastRunDurationSec = state.sessionTime;
@@ -486,6 +492,89 @@ function updateBreaching(state: FullGameState, dt: number): void {
   }
 }
 
+function applyNetCatchSweep(state: FullGameState, rng: Rng): void {
+  for (const fish of state.fish) {
+    if (!fish.alive) continue;
+    if (fish.type === FishType.Boss) {
+      if (state.upgrades.speargun < BOSS_MIN_SPEAR_LEVEL_TO_DAMAGE) {
+        emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
+        state.floatingTexts.push({
+          x: fish.x,
+          y: fish.y - 40,
+          vy: -48,
+          text: 'ARMOR!',
+          life: 0.9,
+          maxLife: 0.9,
+        });
+        continue;
+      }
+      const prev = fish.hitPoints ?? BOSS_FISH_MAX_HP;
+      const next = Math.max(0, prev - BOSS_NET_DAMAGE);
+      fish.hitPoints = next;
+      fish.hitFlash = 1.0;
+      emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
+      state.floatingTexts.push({
+        x: fish.x,
+        y: fish.y - 36,
+        vy: -44,
+        text: `-${BOSS_NET_DAMAGE}`,
+        life: 0.75,
+        maxLife: 0.75,
+      });
+      if (next > 0) {
+        state.shakeIntensity += 2.4;
+        continue;
+      }
+      fish.alive = false;
+      const value = Math.floor(
+        getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
+        * getHaulMultiplier(state.upgrades),
+      );
+      state.money += value;
+      state.sessionEarnings += value;
+      state.sessionCatchCount += 1;
+      emitCatchPayoffFX(state.particles, fish.x, fish.y, fish.type, value, rng);
+      emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: true, tier: moneyTextTier(value) });
+      state.catchFlash = Math.max(
+        state.catchFlash,
+        Math.min(CATCH_FLASH_CAP, 0.05 + Math.min(0.12, value / 500 * 0.1)),
+      );
+      state.shakeIntensity += 4.5;
+      continue;
+    }
+    fish.alive = false;
+    applyFtueShowcaseFleeAfterFirstCatch(state.fish, fish);
+    const value = Math.floor(
+      getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
+      * getHaulMultiplier(state.upgrades),
+    );
+    state.money += value;
+    state.sessionEarnings += value;
+    state.sessionCatchCount += 1;
+    emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng, 0.85);
+    emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: value >= 35, tier: moneyTextTier(value) });
+  }
+  state.shakeIntensity += 4.0;
+}
+
+function clearNetVfxApplyingIfNeeded(state: FullGameState, rng: Rng): void {
+  if (state.netVfx == null) return;
+  if (!state.netVfx.catchesApplied) applyNetCatchSweep(state, rng);
+  state.netVfx = null;
+}
+
+function updateNetVfx(state: FullGameState, dt: number, rng: Rng): void {
+  if (state.netVfx == null) return;
+  state.netVfx.elapsed += dt;
+  if (!state.netVfx.catchesApplied && state.netVfx.elapsed >= NET_VFX_CATCH_AT_SEC) {
+    applyNetCatchSweep(state, rng);
+    state.netVfx.catchesApplied = true;
+  }
+  if (state.netVfx.elapsed >= NET_VFX_TOTAL_SEC) {
+    state.netVfx = null;
+  }
+}
+
 function updateAction(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
   const rng = getGameRng();
   decayHudConsumableFlash(state, dt);
@@ -528,72 +617,9 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   for (const command of commands) {
     // Consumable use
     if (command.type === 'useConsumable') {
-      if (command.id === 'net' && state.consumables.net > 0) {
+      if (command.id === 'net' && state.consumables.net > 0 && state.netVfx == null) {
         state.consumables.net -= 1;
-        // Net: instantly catch normal fish; rock boss takes heavy damage instead
-        for (const fish of state.fish) {
-          if (!fish.alive) continue;
-          if (fish.type === FishType.Boss) {
-            if (state.upgrades.speargun < BOSS_MIN_SPEAR_LEVEL_TO_DAMAGE) {
-              // Need at least level-2 speargun to harm boss armor (same rule as spear)
-              emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
-              state.floatingTexts.push({
-                x: fish.x,
-                y: fish.y - 40,
-                vy: -48,
-                text: 'ARMOR!',
-                life: 0.9,
-                maxLife: 0.9,
-              });
-              continue;
-            }
-            const prev = fish.hitPoints ?? BOSS_FISH_MAX_HP;
-            const next = Math.max(0, prev - BOSS_NET_DAMAGE);
-            fish.hitPoints = next;
-            fish.hitFlash = 1.0;
-            emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
-            state.floatingTexts.push({
-              x: fish.x,
-              y: fish.y - 36,
-              vy: -44,
-              text: `-${BOSS_NET_DAMAGE}`,
-              life: 0.75,
-              maxLife: 0.75,
-            });
-            if (next > 0) {
-              state.shakeIntensity += 2.4;
-              continue;
-            }
-            fish.alive = false;
-            const value = Math.floor(
-              getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
-              * getHaulMultiplier(state.upgrades),
-            );
-            state.money += value;
-            state.sessionEarnings += value;
-            state.sessionCatchCount += 1;
-            emitCatchPayoffFX(state.particles, fish.x, fish.y, fish.type, value, rng);
-            emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: true, tier: moneyTextTier(value) });
-            state.catchFlash = Math.max(
-              state.catchFlash,
-              Math.min(CATCH_FLASH_CAP, 0.05 + Math.min(0.12, value / 500 * 0.1)),
-            );
-            state.shakeIntensity += 4.5;
-            continue;
-          }
-          fish.alive = false;
-          applyFtueShowcaseFleeAfterFirstCatch(state.fish, fish);
-          const value = Math.floor(
-            getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
-            * getHaulMultiplier(state.upgrades),
-          );
-          state.money += value;
-          state.sessionEarnings += value;
-          state.sessionCatchCount += 1;
-          emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng, 0.85);
-          emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: value >= 35, tier: moneyTextTier(value) });
-        }
-        state.shakeIntensity += 4.0;
+        state.netVfx = { elapsed: 0, catchesApplied: false };
         state.hudConsumableFlash.net = 0.34;
       } else if (command.id === 'bait' && state.consumables.bait > 0) {
         state.consumables.bait -= 1;
@@ -1011,6 +1037,10 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       break;
   }
 
+  if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
+    updateNetVfx(state, dt, getGameRng());
+  }
+
   if (state.sharkBiteTeethElapsed >= 0) {
     state.sharkBiteTeethElapsed += dt;
     if (state.sharkBiteTeethElapsed >= SHARK_BITE_VFX_TOTAL_SEC) {
@@ -1259,6 +1289,7 @@ export function getRenderState(state: FullGameState): RenderState {
     catchFlash: state.catchFlash,
     sharkBiteFlash: state.sharkBiteFlash,
     sharkBiteTeethElapsed: state.sharkBiteTeethElapsed,
+    netVfx: state.netVfx != null ? { elapsed: state.netVfx.elapsed } : null,
     hudConsumableFlash: { ...state.hudConsumableFlash },
     treasureCinematic: (() => {
       const tr = state.treasureReveal;

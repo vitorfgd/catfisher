@@ -283,6 +283,12 @@ export const DIVE_BUTTON_LABEL_Y_OFFSET = 3;
 export const NET_COST = 30;
 export const BAIT_COST = 45;
 export const NET_MAX_STOCK = 3;
+/** Net consumable: slide + grow until full-screen cover, then fade (seconds). */
+export const NET_VFX_SLIDE_GROW_SEC = 0.52;
+export const NET_VFX_FADE_SEC = 0.32;
+export const NET_VFX_TOTAL_SEC = NET_VFX_SLIDE_GROW_SEC + NET_VFX_FADE_SEC;
+/** Fish are resolved the frame elapsed reaches this (full cover, before fade dominates). */
+export const NET_VFX_CATCH_AT_SEC = NET_VFX_SLIDE_GROW_SEC;
 export const BAIT_MAX_STOCK = 3;
 export const BAIT_DURATION = 6.0;            // seconds bait remains active
 /** Dropped at cave center; in-world `iconBait` draw size (menu uses same asset at ~40px in HUD) */
