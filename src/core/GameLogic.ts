@@ -15,7 +15,7 @@ import type { RenderState } from '../render/RenderState';
 
 import { getGameRng } from './GameRng';
 import type { Rng } from './Rng';
-import { canvasToActionWorld, getActionViewZoomForSession } from './ActionViewTransform';
+import { actionWorldToCanvas, canvasToActionWorld, getActionViewZoomForSession } from './ActionViewTransform';
 import {
   BAIT_COST,
   BAIT_DURATION,
@@ -28,6 +28,7 @@ import {
   DIVE_DURATION,
   TREASURE_REVEAL_AWARD_AT_SEC,
   TREASURE_REVEAL_DURATION_SEC,
+  TREASURE_MONEY_LERP_SEC,
   TREASURE_REVEAL_WHITE_FADE_SEC,
   TREASURE_REVEAL_WHITE_PEAK_SEC,
   NET_COST,
@@ -36,6 +37,8 @@ import {
   PLAYER_X,
   PLAYER_Y,
   PUFFER_TIME_BONUS,
+  REELED_FISH_SCALE_END,
+  REELED_FISH_SCALE_START,
   WAVE_BURST_BASE_COUNT,
   WAVE_BURST_EXTRA_PER_WAVE,
   WAVE_BURST_MAX_COUNT,
@@ -43,6 +46,7 @@ import {
   WAVE_DURATION_SEC,
   WAVE_NEAR_SPAWN_FRACTION,
   FISH_SPAWN_MAX_ALIVE,
+  FISH_DENSITY_SPEARGUN_LEVELS_PER_EXTRA,
   FISH_SPAWN_WAVE_INTERVAL_SCALE_PER_WAVE,
   FISH_SPAWN_WAVE_INTERVAL_SCALE_CAP,
   SHAKE_COMBO_SCALE,
@@ -50,8 +54,12 @@ import {
   SHAKE_ON_CATCH,
   SHAKE_ON_HOOK,
   SHARK_AGGRO_DELAY,
+  SHARK_ATTACK_CHARGE_SPEED,
   SHARK_ATTACK_DAMAGE,
+  SHARK_ATTACK_GROW_SEC,
   SHARK_ATTACK_RANGE,
+  SHARK_BITE_FLASH_DECAY,
+  SHARK_MAX_ALIVE,
   TREASURE_SPAWN_INTERVAL,
   UPGRADE_MAX_LEVEL,
   BOSS_SPAWN_INTERVAL,
@@ -107,14 +115,19 @@ import {
 
 const FTUE_SHOWCASE_FISH_SCALE = 1.58;
 
+function decayHudConsumableFlash(state: FullGameState, dt: number): void {
+  state.hudConsumableFlash.net = Math.max(0, state.hudConsumableFlash.net - dt);
+  state.hudConsumableFlash.bait = Math.max(0, state.hudConsumableFlash.bait - dt);
+}
+
 /**
  * Cluster above the bottom-fixed turret; [0] = hand + tap target.
  * Kept low enough for the starting spear range to reach every showcase fish.
  */
 const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
-  { x: PLAYER_X - 96, y: 432, type: FishType.Small },
-  { x: PLAYER_X + 108, y: 434, type: FishType.Small },
-  { x: PLAYER_X - 4, y: 362, type: FishType.Medium },
+  { x: PLAYER_X - 96, y: Math.round((432 * CANVAS_HEIGHT) / 854), type: FishType.Small },
+  { x: PLAYER_X + 108, y: Math.round((434 * CANVAS_HEIGHT) / 854), type: FishType.Small },
+  { x: PLAYER_X - 4, y: Math.round((362 * CANVAS_HEIGHT) / 854), type: FishType.Medium },
 ];
 
 /**
@@ -211,8 +224,10 @@ export function createInitialState(): FullGameState {
     shakeX: 0,
     shakeY: 0,
     catchFlash: 0,
+    sharkBiteFlash: 0,
     diveTimer: 0,
     pendingEvents: [],
+    hudConsumableFlash: { net: 0, bait: 0 },
   };
 }
 
@@ -242,7 +257,9 @@ function resetForNewDive(state: FullGameState): void {
   state.shakeX = 0;
   state.shakeY = 0;
   state.catchFlash = 0;
+  state.sharkBiteFlash = 0;
   state.treasureReveal = null;
+  state.hudConsumableFlash = { net: 0, bait: 0 };
 }
 
 function finishRun(state: FullGameState): void {
@@ -261,7 +278,9 @@ function finishRun(state: FullGameState): void {
   state.shakeX = 0;
   state.shakeY = 0;
   state.catchFlash = 0;
+  state.sharkBiteFlash = 0;
   state.treasureReveal = null;
+  state.hudConsumableFlash = { net: 0, bait: 0 };
   state.pendingEvents.push({
     type: 'runEnded',
     earnings: state.sessionEarnings,
@@ -323,13 +342,13 @@ function updateTreasureReveal(state: FullGameState, dt: number, r: Rng): void {
   if (!tr.awarded && tr.elapsed >= tr.awardAtSec) {
     tr.awarded = true;
     const totalReward = tr.value;
+    const moneyBefore = state.money;
     state.money += totalReward;
+    tr.moneyLerpFrom = moneyBefore;
+    tr.moneyLerpTo = state.money;
     state.sessionEarnings += totalReward;
     state.sessionCatchCount += 1;
-    // Particles in center so they read above the dimmed playfield; prize text is on the treasure overlay
-    const cx = CANVAS_WIDTH * 0.5;
-    const cy = CANVAS_HEIGHT * 0.48;
-    emitCatchPayoffFX(state.particles, cx, cy, FishType.Treasure, totalReward, r);
+    emitCatchPayoffFX(state.particles, tr.x, tr.y, FishType.Treasure, totalReward, r);
     state.catchFlash = Math.max(
       state.catchFlash,
       Math.min(CATCH_FLASH_CAP, 0.04 + Math.min(0.15, totalReward / 400 * 0.095)),
@@ -359,8 +378,12 @@ function updateDiving(state: FullGameState, dt: number): void {
 
 function updateAction(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
   const rng = getGameRng();
+  decayHudConsumableFlash(state, dt);
   if (state.catchFlash > 0) {
     state.catchFlash = Math.max(0, state.catchFlash - CATCH_FLASH_DECAY * dt);
+  }
+  if (state.sharkBiteFlash > 0) {
+    state.sharkBiteFlash = Math.max(0, state.sharkBiteFlash - SHARK_BITE_FLASH_DECAY * dt);
   }
 
   if (state.ftueActive) {
@@ -461,13 +484,14 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
           emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: value >= 35, tier: moneyTextTier(value) });
         }
         state.shakeIntensity += 4.0;
+        state.hudConsumableFlash.net = 0.34;
       } else if (command.id === 'bait' && state.consumables.bait > 0) {
         state.consumables.bait -= 1;
         state.baitActive = true;
         state.baitTimer = BAIT_DURATION;
-        // Drop at center of cave; same `iconBait` art as the boat + HUD
+        // Drop at screen center; same `iconBait` art as the boat + HUD
         state.baitX = CANVAS_WIDTH / 2;
-        state.baitY = CANVAS_HEIGHT * 0.38;
+        state.baitY = CANVAS_HEIGHT / 2;
         const bnx = state.baitX;
         const bny = state.baitY;
         for (const f of state.fish) {
@@ -502,6 +526,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
             state.nextFishId += n;
           }
         }
+        state.hudConsumableFlash.bait = 0.34;
       }
       continue;
     }
@@ -562,26 +587,41 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     const waveBlock = Math.floor(state.sessionTime / WAVE_DURATION_SEC);
     if (waveBlock > state.lastWaveBurstIndex) {
       const liveNow = state.fish.filter((f) => f.alive).length;
-      const room = Math.max(0, FISH_SPAWN_MAX_ALIVE - liveNow);
+      const spearDensityExtra = Math.ceil(
+        Math.max(0, state.upgrades.speargun - 1) / FISH_DENSITY_SPEARGUN_LEVELS_PER_EXTRA,
+      );
+      const room = Math.max(0, FISH_SPAWN_MAX_ALIVE + spearDensityExtra - liveNow);
       const extra = Math.min(
         WAVE_BURST_EXTRA_CAP,
         WAVE_BURST_EXTRA_PER_WAVE * Math.max(0, waveBlock),
       );
       let n = Math.min(
-        WAVE_BURST_MAX_COUNT,
-        WAVE_BURST_BASE_COUNT + extra,
+        WAVE_BURST_MAX_COUNT + spearDensityExtra,
+        WAVE_BURST_BASE_COUNT + extra + spearDensityExtra,
       );
       n = Math.min(n, room);
       if (n > 0) {
-        const nearN =
-          n <= 1
+        const nearN = WAVE_NEAR_SPAWN_FRACTION <= 0
+          ? 0
+          : n <= 1
             ? 0
             : Math.min(n, Math.max(1, Math.round(n * WAVE_NEAR_SPAWN_FRACTION)));
+        let sharksAlive = state.fish.filter((f) => f.alive && f.type === FishType.Large).length;
         for (let u = 0; u < nearN; u += 1) {
-          state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, { spawnInward: true }));
+          const fish = spawnFish(state.nextFishId++, rng, state.sessionTime, {
+            spawnInward: true,
+            avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+          });
+          if (fish.type === FishType.Large) sharksAlive += 1;
+          state.fish.push(fish);
         }
         for (let v = 0; v < n - nearN; v += 1) {
-          state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, { spawnInward: false }));
+          const fish = spawnFish(state.nextFishId++, rng, state.sessionTime, {
+            spawnInward: false,
+            avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+          });
+          if (fish.type === FishType.Large) sharksAlive += 1;
+          state.fish.push(fish);
         }
       }
       state.lastWaveBurstIndex = waveBlock;
@@ -598,7 +638,10 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   if (state.fishSpawnTimer <= 0) {
     const liveFish = state.fish.filter((f) => f.alive).length;
     if (liveFish < FISH_SPAWN_MAX_ALIVE) {
-      state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime));
+      const sharksAlive = state.fish.filter((f) => f.alive && f.type === FishType.Large).length;
+      state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, {
+        avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+      }));
     }
     state.fishSpawnTimer = getModulatedSpawnInterval(state.sessionTime) * waveIntScale;
   }
@@ -637,14 +680,22 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   );
 
   // ── Shark attack ─────────────────────────────────────────────────────────
+  let sharkBiteThisFrame = false;
   for (const fish of state.fish) {
     if (fish.type !== FishType.Large || !fish.alive || fish.hasAttacked) continue;
     if (fish.age < SHARK_AGGRO_DELAY) continue;
     const dx = fish.x - PLAYER_X;
     const dy = fish.y - PLAYER_Y;
-    if (Math.sqrt(dx * dx + dy * dy) < SHARK_ATTACK_RANGE) {
+    const dist = Math.sqrt(dx * dx + dy * dy);
+    if (dist > 1) {
+      fish.vx = (-dx / dist) * SHARK_ATTACK_CHARGE_SPEED;
+      fish.vy = (-dy / dist) * SHARK_ATTACK_CHARGE_SPEED;
+    }
+    if (!sharkBiteThisFrame && dist < SHARK_ATTACK_RANGE) {
+      sharkBiteThisFrame = true;
       fish.hasAttacked = true;
       fish.hitFlash = 1.0;
+      state.sharkBiteFlash = 1;
       state.roundTimeLeft = Math.max(0, state.roundTimeLeft - SHARK_ATTACK_DAMAGE);
       state.shakeIntensity += 5.5;
       emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
@@ -857,6 +908,19 @@ export function getRenderState(state: FullGameState): RenderState {
     : (state.player.shootCooldown <= 0 ? 'READY' : 'LOAD');
 
   const ftue = state.ftueActive;
+  const trPay = state.treasureReveal;
+  let hudMoneyDisplay = state.money;
+  if (
+    trPay?.awarded
+    && trPay.moneyLerpFrom != null
+    && trPay.moneyLerpTo != null
+  ) {
+    const tSince = trPay.elapsed - trPay.awardAtSec;
+    const u = Math.min(1, Math.max(0, tSince / TREASURE_MONEY_LERP_SEC));
+    const s = u * u * (3 - 2 * u);
+    hudMoneyDisplay = Math.round(trPay.moneyLerpFrom + (trPay.moneyLerpTo - trPay.moneyLerpFrom) * s);
+  }
+
   return {
     phase: state.phase,
     ftueActive: ftue,
@@ -867,12 +931,24 @@ export function getRenderState(state: FullGameState): RenderState {
       y: state.player.y,
       aimAngle: state.player.aimAngle,
     },
-    spears: state.spears.map((spear) => ({
-      x: spear.x,
-      y: spear.y,
-      angle: spear.fireAngle,   // never flips on return
-      carryingFishType: spear.caughtFishType,
-    })),
+    spears: state.spears.map((spear) => {
+      let carryingFishScale = REELED_FISH_SCALE_START;
+      if (spear.caughtFishType !== null) {
+        const anchor = getTurretMuzzleWorld(state.player.x, state.player.y);
+        const dist = Math.hypot(anchor.x - spear.x, anchor.y - spear.y);
+        const startDist = Math.max(1, spear.caughtFishStartDistance);
+        const progress = Math.min(1, Math.max(0, 1 - dist / startDist));
+        const smooth = progress * progress * (3 - 2 * progress);
+        carryingFishScale = REELED_FISH_SCALE_START + (REELED_FISH_SCALE_END - REELED_FISH_SCALE_START) * smooth;
+      }
+      return {
+        x: spear.x,
+        y: spear.y,
+        angle: spear.fireAngle,   // never flips on return
+        carryingFishType: spear.caughtFishType,
+        carryingFishScale,
+      };
+    }),
     fish: state.fish
       .filter((current) => current.alive || current.hitFlash > 0)
       .map((current) => {
@@ -884,6 +960,13 @@ export function getRenderState(state: FullGameState): RenderState {
           : Math.sin(state.sessionTime * 7.5 + current.id * 2.1) * 0.09;
         const rotation = current.type === FishType.Jelly ? 0
           : Math.max(-maxTilt, Math.min(maxTilt, rawTilt + wobble));
+        const isAggressive = current.type === FishType.Large
+          && current.alive
+          && current.age >= SHARK_AGGRO_DELAY
+          && !current.hasAttacked;
+        const attackProgress = isAggressive
+          ? Math.min(1, (current.age - SHARK_AGGRO_DELAY) / SHARK_ATTACK_GROW_SEC)
+          : 0;
         return {
           x: current.x,
           y: current.y,
@@ -892,15 +975,14 @@ export function getRenderState(state: FullGameState): RenderState {
           hitFlash: current.hitFlash,
           facingLeft: current.vx > 0,  // sprites face LEFT natively — flip when moving right
           rotation,
-          isAggressive: current.type === FishType.Large
-            && current.alive
-            && current.age >= SHARK_AGGRO_DELAY
-            && !current.hasAttacked,
+          isAggressive,
+          attackProgress,
         };
       }),
     particles: [...state.particles],
     floatingTexts: [...state.floatingTexts],
     money: state.money,
+    hudMoneyDisplay,
     timeLeftFraction: ftue
       ? 1
       : state.roundTimeMax > 0
@@ -908,12 +990,6 @@ export function getRenderState(state: FullGameState): RenderState {
         : 0,
     roundTimeLeft: ftue ? state.roundTimeMax : state.roundTimeLeft,
     roundTimeMax: state.roundTimeMax,
-    waveIndex: ftue ? 1 : 1 + Math.floor(state.sessionTime / WAVE_DURATION_SEC),
-    waveProgress: ftue
-      ? 0
-      : WAVE_DURATION_SEC > 0
-        ? (state.sessionTime % WAVE_DURATION_SEC) / WAVE_DURATION_SEC
-        : 0,
     timeElapsed: ftue ? 0 : state.sessionTime,
     actionSessionTime: state.phase === GamePhase.Action ? state.sessionTime : 0,
     sessionEarnings: state.sessionEarnings,
@@ -943,6 +1019,8 @@ export function getRenderState(state: FullGameState): RenderState {
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
     catchFlash: state.catchFlash,
+    sharkBiteFlash: state.sharkBiteFlash,
+    hudConsumableFlash: { ...state.hudConsumableFlash },
     treasureCinematic: (() => {
       const tr = state.treasureReveal;
       if (tr == null) return undefined;
@@ -959,10 +1037,30 @@ export function getRenderState(state: FullGameState): RenderState {
       } else {
         revealWhiteAlpha = 0;
       }
+      const zoom = getActionViewZoomForSession(state.sessionTime, state.ftueActive);
+      const raw = actionWorldToCanvas(
+        tr.x,
+        tr.y,
+        state.shakeX,
+        state.shakeY,
+        state.player.x,
+        state.player.y,
+        zoom,
+      );
+      const pad = 48;
+      const chestScreenX = Math.min(CANVAS_WIDTH - pad, Math.max(pad, raw.x));
+      const chestScreenY = Math.min(CANVAS_HEIGHT - pad, Math.max(pad, raw.y));
+      const elapsedSinceAward = tr.awarded ? tr.elapsed - tr.awardAtSec : 0;
+      const coinCount = Math.min(
+        14,
+        Math.max(5, 4 + Math.floor(Math.log2(tr.value + 8))),
+      );
       return {
         progress: p,
-        revealWhiteAlpha,
+        revealWhiteAlpha: revealWhiteAlpha * 0.55,
         opened: tr.opened,
+        chestScreenX,
+        chestScreenY,
         chestScale:
           0.9
           + Math.min(1, tr.elapsed / 0.4) * 0.1
@@ -980,6 +1078,9 @@ export function getRenderState(state: FullGameState): RenderState {
         comboText: tr.awarded && tr.comboBonus > 0
           ? `x${tr.totalComboForLine} COMBO`
           : undefined,
+        treasureValue: tr.value,
+        elapsedSinceAward,
+        coinCount,
       };
     })(),
   };

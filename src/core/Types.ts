@@ -55,6 +55,8 @@ export interface SpearState {
   maxDistance: number;
   mode: SpearMode;
   caughtFishType: FishType | null;
+  /** Distance from player anchor when fish was hooked; used for progressive reel-in scale. */
+  caughtFishStartDistance: number;
   catchValue: number;
   done: boolean;
 }
@@ -170,6 +172,11 @@ export interface FullGameState {
   shakeY: number;
   /** Brief full-screen flash when a catch is cashed in (seconds of alpha driver) */
   catchFlash: number;
+  /** Brief red flash when an attacking shark bites. */
+  sharkBiteFlash: number;
+
+  /** HUD consumable button pulse after use (seconds remaining). */
+  hudConsumableFlash: { net: number; bait: number };
 
   // Transition
   diveTimer: number; // 0 -> DIVE_DURATION during Diving phase
@@ -201,4 +208,7 @@ export interface TreasureRevealState {
   totalComboForLine: number;
   durationSec: number;
   awardAtSec: number;
+  /** Set when award applies — HUD count-up from → to (inclusive of payout). */
+  moneyLerpFrom?: number;
+  moneyLerpTo?: number;
 }

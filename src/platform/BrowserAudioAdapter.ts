@@ -48,6 +48,16 @@ export class BrowserAudioAdapter implements AudioAdapter {
         break;
       }
       case 'fishCaught': {
+        if (event.fishType === FishType.Treasure) {
+          const n = Math.min(10, Math.max(4, 3 + Math.floor(Math.log2(event.value + 8))));
+          const base = 720;
+          for (let i = 0; i < n; i += 1) {
+            const delay = i * 42;
+            const freq = base + i * 55 + Math.min(120, event.value / 25);
+            setTimeout(() => this.playTone(freq, 0.055, 0.14, 'sine'), delay);
+          }
+          break;
+        }
         const freq = 420 + Math.min(event.value * 4, 360);
         this.playTone(freq, 0.12, 0.22, 'triangle');
         setTimeout(() => this.playTone(freq + 110, 0.1, 0.18, 'triangle'), 70);

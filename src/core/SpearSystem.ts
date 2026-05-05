@@ -1,19 +1,11 @@
 import type { FishState, FishType, PlayerState, SpearState } from './Types';
 import { SpearMode } from './Types';
-import {
-  SPEAR_SPEED,
-  TURRET_MUZZLE_U,
-  TURRET_MUZZLE_V,
-  TURRET_SPRITE_H,
-  TURRET_SPRITE_W,
-} from './Constants';
+import { SPEAR_SPEED } from './Constants';
 import { getFishHitbox } from './FishSystem';
 
-/** World position of the cannon muzzle (turret is not mirrored; aim is ignored for anchor). */
+/** First-person tether origin: bottom-center of the action view. */
 export function getTurretMuzzleWorld(playerX: number, playerY: number): { x: number; y: number } {
-  const x = playerX - TURRET_SPRITE_W / 2 + TURRET_MUZZLE_U * TURRET_SPRITE_W;
-  const y = playerY - TURRET_SPRITE_H + TURRET_MUZZLE_V * TURRET_SPRITE_H;
-  return { x, y };
+  return { x: playerX, y: playerY };
 }
 
 export interface DeliveredCatch {
@@ -42,6 +34,7 @@ export function fireSpear(
     maxDistance,
     mode: SpearMode.Outbound,
     caughtFishType: null,
+    caughtFishStartDistance: 0,
     catchValue: 0,
     done: false,
   };
@@ -54,6 +47,7 @@ export function attachCatchToSpear(
 ): void {
   spear.mode = SpearMode.Returning;
   spear.caughtFishType = fishType;
+  spear.caughtFishStartDistance = Math.max(1, spear.distanceTravelled);
   spear.catchValue = catchValue;
 }
 
@@ -61,6 +55,7 @@ export function attachCatchToSpear(
 export function returnSpearWithoutCatch(spear: SpearState): void {
   spear.mode = SpearMode.Returning;
   spear.caughtFishType = null;
+  spear.caughtFishStartDistance = 0;
   spear.catchValue = 0;
 }
 

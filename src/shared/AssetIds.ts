@@ -5,6 +5,8 @@ export const AssetIds = {
   fishSmall: 'fishSmall',
   fishMedium: 'fishMedium',
   fishLarge: 'fishLarge',
+  /** Frontal shark shown while charging the player. */
+  fishLargeAttack: 'fishLargeAttack',
   /** Swordfish (rare / high value) */
   fishRare: 'fishRare',
   fishJelly: 'fishJelly',
@@ -25,6 +27,8 @@ export const AssetIds = {
   playerTurret: 'playerTurret',
   boatBg: 'boatBg',
   boatSprite: 'boatSprite',
+  /** Boat menu title art (full logo PNG). */
+  titleLogo: 'titleLogo',
 
   // Upgrade sprites (level 1-5)
   upSpeargun1: 'upSpeargun1',

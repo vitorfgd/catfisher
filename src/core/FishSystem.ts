@@ -78,18 +78,21 @@ function spawnInwardFromEdge(
   return { x, y, vx: (dx / len) * speed, vy: (dy / len) * speed };
 }
 
-export function pickFishType(rng: Rng): FishType {
-  return rng.weightedIndex(FISH_SPAWN_WEIGHTS) as FishType;
+export function pickFishType(rng: Rng, opts?: { avoidShark?: boolean }): FishType {
+  if (!opts?.avoidShark) return rng.weightedIndex(FISH_SPAWN_WEIGHTS) as FishType;
+  const weights = [...FISH_SPAWN_WEIGHTS];
+  weights[FishType.Large] = 0;
+  return rng.weightedIndex(weights) as FishType;
 }
 
 export function spawnFish(
   id: number,
   rng: Rng,
   sessionTime: number,
-  opts?: { spawnInward?: boolean },
+  opts?: { spawnInward?: boolean; avoidShark?: boolean },
 ): FishState {
   const spawnInward = opts?.spawnInward === true;
-  const rawType = pickFishType(rng);
+  const rawType = pickFishType(rng, { avoidShark: opts?.avoidShark === true });
   const type = rawType === FishType.Rare && sessionTime < RARE_FISH_MIN_SESSION_TIME
     ? FishType.Medium
     : rawType;
@@ -126,34 +129,20 @@ export function spawnFish(
     vx = inward.vx;
     vy = inward.vy;
   } else {
-    // All other fish: weighted spawn from any edge (mostly left/right)
+    // All other fish enter from the side so they visibly cross the catchable playfield.
     const roll = rng.next();
-    if (roll < 0.38) {
+    if (roll < 0.5) {
       // from left
       const ang = rng.between(-Math.PI * 0.28, Math.PI * 0.28);
       x = -FISH_OFFSCREEN_MARGIN;
       y = rng.between(Y_MIN, Y_MAX);
       vx = Math.cos(ang) * speed;
       vy = Math.sin(ang) * speed;
-    } else if (roll < 0.76) {
+    } else {
       // from right
       const ang = rng.between(Math.PI * 0.72, Math.PI * 1.28);
       x = CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN;
       y = rng.between(Y_MIN, Y_MAX);
-      vx = Math.cos(ang) * speed;
-      vy = Math.sin(ang) * speed;
-    } else if (roll < 0.88) {
-      // from top
-      const ang = rng.between(Math.PI * 0.28, Math.PI * 0.72);
-      x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
-      y = Y_MIN - FISH_OFFSCREEN_MARGIN;
-      vx = Math.cos(ang) * speed;
-      vy = Math.sin(ang) * speed;
-    } else {
-      // from bottom (below play band — was Y_MAX + margin, still on-screen)
-      const ang = rng.between(-Math.PI * 0.72, -Math.PI * 0.28);
-      x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
-      y = CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
       vx = Math.cos(ang) * speed;
       vy = Math.sin(ang) * speed;
     }

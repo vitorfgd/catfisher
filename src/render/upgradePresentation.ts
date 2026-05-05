@@ -8,18 +8,23 @@ export const UPGRADE_LABELS: Record<keyof UpgradeState, string> = {
   oxygen: 'DIVE TIME',
 };
 
+/** One-line effect hint on the boat upgrade rows (replaces category kickers). */
+export const UPGRADE_SUBTEXT: Record<keyof UpgradeState, string> = {
+  speargun: 'Spear range, reload & cash per fish',
+  haul: 'More money on every catch',
+  oxygen: 'Longer dive before time runs out',
+};
+
 export const UPGRADE_LEVEL_NAMES: Record<keyof UpgradeState, string[]> = {
   speargun: ['Fishing Rod', 'Hand Spear', 'Speargun Mk.I', 'Pneumatic Gun'],
   haul: ['Small Bag', 'Fishing Bag', 'Fish Crate', 'Cargo Net'],
   oxygen: ['First Minute', 'Extra Stretch', 'Long Shift', 'Marathon Air'],
 };
 
-/**
- * Gear cards: two-line block like upgrades (kicker 14/600, name 19/800) — short, no long descriptions.
- */
-export const CONSUMABLE_LINES: Record<'net' | 'bait', { kicker: string; name: string }> = {
-  net:  { kicker: 'CAST', name: 'NET' },
-  bait: { kicker: 'LURE', name: 'BAIT' },
+/** Gear card titles (no subtitle on gear). */
+export const CONSUMABLE_NAMES: Record<'net' | 'bait', string> = {
+  net: 'NET',
+  bait: 'BAIT',
 };
 
 export const UPGRADE_LEVEL_SPRITES: Record<keyof UpgradeState, string[]> = {

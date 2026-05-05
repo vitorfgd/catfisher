@@ -1,5 +1,3 @@
-import { TURRET_SPRITE_H } from './Constants';
-
 /**
  * In Action, the world is drawn with a uniform zoom around a focus (usually near the player).
  * Pointer events arrive in unscaled canvas space; this maps them back to world coords for aim.
@@ -10,8 +8,8 @@ export const FTUE_VIEW_ZOOM = 1.28;
 export const ACTION_ZOOM_EASE_IN_SEC = 0.75;
 
 export function actionViewFocus(playerX: number, playerY: number): { x: number; y: number } {
-  // Focus through the turret (mid-upper) so zoom keeps aim and fish readable
-  return { x: playerX, y: playerY - TURRET_SPRITE_H * 0.45 };
+  // First-person anchor: keep the tether origin pinned to bottom-center while zooming.
+  return { x: playerX, y: playerY };
 }
 
 /**
@@ -36,6 +34,25 @@ export function canvasToActionWorld(
     x: zf.x + (sx - zf.x) / zoom,
     y: zf.y + (sy - zf.y) / zoom,
   };
+}
+
+/** Forward: world coords → canvas (matches RenderFrame shake + scale order). */
+export function actionWorldToCanvas(
+  worldX: number,
+  worldY: number,
+  shakeX: number,
+  shakeY: number,
+  playerX: number,
+  playerY: number,
+  zoom: number,
+): { x: number; y: number } {
+  const zf = actionViewFocus(playerX, playerY);
+  if (Math.abs(zoom - 1) < 1e-6) {
+    return { x: worldX + shakeX, y: worldY + shakeY };
+  }
+  const sx = zf.x + (worldX - zf.x) * zoom;
+  const sy = zf.y + (worldY - zf.y) * zoom;
+  return { x: sx + shakeX, y: sy + shakeY };
 }
 
 /**

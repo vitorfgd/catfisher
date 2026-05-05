@@ -20,6 +20,7 @@ export interface RenderSpearState {
   y: number;
   angle: number; // radians
   carryingFishType: FishType | null;
+  carryingFishScale: number;
 }
 
 export interface RenderFishState {
@@ -32,6 +33,7 @@ export interface RenderFishState {
   facingLeft: boolean;
   rotation: number;      // radians — tilt sprite to match swim direction
   isAggressive: boolean; // shark in attack mode → red warning glow
+  attackProgress: number; // Large shark charge visual, 0-1
 }
 
 export interface RenderState {
@@ -51,13 +53,11 @@ export interface RenderState {
 
   // HUD
   money: number;
+  /** During treasure count-up, interpolated dollars for the HUD pill. */
+  hudMoneyDisplay: number;
   timeLeftFraction: number; // 0-1 — round timer
   roundTimeLeft: number;
   roundTimeMax: number;
-  /** 1-based; advances every WAVE_DURATION_SEC in-dive. */
-  waveIndex: number;
-  /** 0-1, progress through the current wave (for edge meter). */
-  waveProgress: number;
   timeElapsed: number;    // seconds since dive started
   /** Action only — real `sessionTime` (FTUE can keep `timeElapsed` 0; zoom easing uses this). */
   actionSessionTime: number;
@@ -91,17 +91,27 @@ export interface RenderState {
 
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;
+  /** Brief red flash when a charging shark bites (0 = off) */
+  sharkBiteFlash: number;
 
-  /** Center-screen chest open payout (Ridiculous Hook style); undefined when idle */
+  /** Pulse timer after using net/bait on the dive HUD (seconds). */
+  hudConsumableFlash: { net: number; bait: number };
+
+  /** In-world chest payout overlay; undefined when idle */
   treasureCinematic?: {
     progress: number;
-    /** 0-1: full-screen white before prize / chest (Ridiculous Fishing beat) */
+    /** 0-1: brief white punch */
     revealWhiteAlpha: number;
     opened: boolean;
+    chestScreenX: number;
+    chestScreenY: number;
     chestScale: number;
     shake: number;
     prizeText: string;
     /** After gold hits the chest, show combo on the same card */
     comboText?: string;
+    treasureValue: number;
+    elapsedSinceAward: number;
+    coinCount: number;
   };
 }

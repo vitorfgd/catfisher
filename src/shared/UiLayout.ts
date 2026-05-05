@@ -1,5 +1,7 @@
 import {
-  BOAT_SHEET_PAD,
+  BOAT_CONTENT_X,
+  BOAT_CONTENT_W,
+  CANVAS_HEIGHT,
   CANVAS_WIDTH,
   CONSUMABLE_GAP,
   CONSUMABLE_H,
@@ -7,9 +9,9 @@ import {
   CONSUMABLE_Y,
   DIVE_BUTTON_HEIGHT,
   DIVE_BUTTON_Y,
+  HUD_TIME_STRIP_Y,
   UPGRADE_BUTTON_GAP,
   UPGRADE_BUTTON_H,
-  UPGRADE_BUTTON_W,
   UPGRADE_BUTTONS_TOP,
   UPGRADE_MARGIN,
   UPGRADE_PANEL_BUY_H,
@@ -20,15 +22,19 @@ import type { UpgradeState } from '../core/Types';
 export const UPGRADE_KEYS = ['speargun', 'haul', 'oxygen'] as const;
 export const HUD_CONSUMABLE_BUTTON_RADIUS = 27;
 export const HUD_CONSUMABLE_BUTTON_HIT_RADIUS = 33;
-export const HUD_CONSUMABLE_BUTTON_Y = 97;
+/** Scaled from legacy 9:16 layout; never overlaps the bottom timer strip. */
+export const HUD_CONSUMABLE_BUTTON_Y = Math.min(
+  Math.round((CANVAS_HEIGHT * 97) / 854),
+  HUD_TIME_STRIP_Y - HUD_CONSUMABLE_BUTTON_HIT_RADIUS - 10,
+);
 export const HUD_BAIT_BUTTON_CX = CANVAS_WIDTH - 37;
 export const HUD_NET_BUTTON_CX = CANVAS_WIDTH - 99;
 
 export function getUpgradeButtonRect(index: number): { x: number; y: number; w: number; h: number } {
   return {
-    x: UPGRADE_MARGIN + BOAT_SHEET_PAD,
+    x: BOAT_CONTENT_X,
     y: UPGRADE_BUTTONS_TOP + index * (UPGRADE_BUTTON_H + UPGRADE_BUTTON_GAP),
-    w: UPGRADE_BUTTON_W,
+    w: BOAT_CONTENT_W,
     h: UPGRADE_BUTTON_H,
   };
 }
@@ -51,17 +57,17 @@ export function isUpgradePanelBuyButton(lx: number, ly: number): boolean {
 }
 
 export function isDiveButton(lx: number, ly: number): boolean {
-  const x = UPGRADE_MARGIN + BOAT_SHEET_PAD;
+  const x = BOAT_CONTENT_X;
   return (
     lx >= x
-    && lx <= x + UPGRADE_BUTTON_W
+    && lx <= x + BOAT_CONTENT_W
     && ly >= DIVE_BUTTON_Y
     && ly <= DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT
   );
 }
 
 export function getBoatConsumableBuyHit(lx: number, ly: number): 'net' | 'bait' | null {
-  const netX = UPGRADE_MARGIN + BOAT_SHEET_PAD;
+  const netX = BOAT_CONTENT_X;
   const baitX = netX + CONSUMABLE_W + CONSUMABLE_GAP;
   if (ly < CONSUMABLE_Y || ly > CONSUMABLE_Y + CONSUMABLE_H) return null;
   if (lx >= netX && lx <= netX + CONSUMABLE_W) return 'net';

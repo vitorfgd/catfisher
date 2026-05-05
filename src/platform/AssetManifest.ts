@@ -5,6 +5,7 @@ export const BrowserAssetManifest = {
     [AssetIds.fishSmall]: 'assets/fish-sprite.png',
     [AssetIds.fishMedium]: 'assets/fish-snapper.png',
     [AssetIds.fishLarge]: 'assets/fish-shark.png',
+    [AssetIds.fishLargeAttack]: 'assets/fish-shark-attack.png',
     [AssetIds.fishRare]: 'assets/fish-swordfish.png',
     [AssetIds.fishJelly]: 'assets/fish-jellyfish.png',
     [AssetIds.fishPuffer]: 'assets/fish-puffer.png',
@@ -19,6 +20,7 @@ export const BrowserAssetManifest = {
     [AssetIds.playerTurret]: 'assets/player-turret.png',
     [AssetIds.boatBg]: 'assets/boat-bg.png',
     [AssetIds.boatSprite]: 'assets/boat-sprite.png',
+    [AssetIds.titleLogo]: 'assets/title-logo-transparent.png',
     [AssetIds.upSpeargun1]: 'assets/up-speargun-1.png',
     [AssetIds.upSpeargun2]: 'assets/up-speargun-2.png',
     [AssetIds.upSpeargun3]: 'assets/up-speargun-3.png',
@@ -85,7 +87,10 @@ export async function loadImages(
       ([id, src]) =>
         new Promise<void>((resolve) => {
           const img = new Image();
-          img.onload = () => { result[id] = img; resolve(); };
+          img.onload = () => {
+            result[id] = img;
+            resolve();
+          };
           img.onerror = () => {
             missing.push(id);
             result[id] = createMissingImageFallback(id);
