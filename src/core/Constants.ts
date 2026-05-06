@@ -207,30 +207,32 @@ export const BOAT_CONTENT_W = UPGRADE_BUTTON_W;
 /** Left/right padding from content column edge to primary text in stats rows. */
 export const BOAT_CONTENT_TEXT_PAD_X = 12;
 
-/** Boat menu title PNG is 1024×682; scale to shell width with a height cap. */
-export const BOAT_TITLE_LOGO_ASPECT = 1024 / 682;
-export const BOAT_TITLE_LOGO_TOP = 15;
-export const BOAT_TITLE_LOGO_GAP_TO_STATS = 18;
-export const BOAT_TITLE_LOGO_MAX_H_PX = 236;
 /** Full-screen dim over `boatBg` on the boat menu. */
 export const BOAT_MENU_SCRIM_ALPHA = 0.2;
 
-export function getBoatTitleLogoDrawSize(): { drawW: number; drawH: number } {
-  const maxW = BOAT_SHELL_W;
-  const maxH = BOAT_TITLE_LOGO_MAX_H_PX;
-  let drawW = maxW;
-  let drawH = Math.round(drawW / BOAT_TITLE_LOGO_ASPECT);
-  if (drawH > maxH) {
-    drawH = maxH;
-    drawW = Math.round(drawH * BOAT_TITLE_LOGO_ASPECT);
-  }
-  return { drawW, drawH };
+/** Top Y of the Bank / Last dive stats row (no title logo). */
+export const BOAT_STATS_CARD_TOP = 33;
+
+/** Bank / last-dive card top Y — same as {@link BOAT_STATS_CARD_TOP}. */
+export function getBoatStatsCardTopY(): number {
+  return BOAT_STATS_CARD_TOP;
 }
 
-/** Bank / last-dive card top Y — sits under the title logo. */
-export function getBoatStatsCardTopY(): number {
-  return BOAT_TITLE_LOGO_TOP + getBoatTitleLogoDrawSize().drawH + BOAT_TITLE_LOGO_GAP_TO_STATS;
-}
+/** Vertical padding inside grouped boat menu section cards (upgrades / gear / go fish). */
+export const BOAT_MENU_SECTION_CARD_PAD_Y = 10;
+/** Vertical gap between stacked section card plates (upgrades / gear / go fish). */
+export const BOAT_SECTION_CARD_STACK_GAP_Y = 30;
+/** Lifts the whole upgrades block (header + rows) for air under stats; keeps Go Fish anchored via `DIVE_BUTTON_GAP`. */
+export const BOAT_MENU_UPGRADES_BLOCK_LIFT_PX = 40;
+/**
+ * Horizontal inset of upgrades / gear / go-fish controls inside the section card plate.
+ * Must match `getUpgradeButtonRect` / boat consumable hits in `UiLayout`.
+ */
+export const BOAT_MENU_SECTION_INNER_PAD_X = 12;
+export const BOAT_SECTION_CONTENT_X = BOAT_CONTENT_X + BOAT_MENU_SECTION_INNER_PAD_X;
+export const BOAT_SECTION_CONTENT_W = BOAT_CONTENT_W - 2 * BOAT_MENU_SECTION_INNER_PAD_X;
+/** Inset of the green GO FISH control inside the section content column (must match `UiLayout.isDiveButton`). */
+export const BOAT_MENU_DIVE_BUTTON_INNER_PAD_X = 8;
 
 export const UPGRADE_BUTTON_H = 88;
 export const UPGRADE_BUTTON_GAP = 10;
@@ -241,7 +243,10 @@ export const BOAT_UPGRADES_VERTICAL_NUDGE_PX = 132;
  * Legacy reference height 854 = old 9:16 logical canvas.
  */
 export const UPGRADE_BUTTONS_TOP =
-  327 + Math.round((CANVAS_HEIGHT - 854) * 0.28) + BOAT_UPGRADES_VERTICAL_NUDGE_PX;
+  327
+  + Math.round((CANVAS_HEIGHT - 854) * 0.28)
+  + BOAT_UPGRADES_VERTICAL_NUDGE_PX
+  - BOAT_MENU_UPGRADES_BLOCK_LIFT_PX;
 /** Bottom Y of the last upgrade row (exclusive of margin below the row). */
 export const UPGRADE_LAST_ROW_BOTTOM =
   UPGRADE_BUTTONS_TOP + 3 * UPGRADE_BUTTON_H + 2 * UPGRADE_BUTTON_GAP;
@@ -253,20 +258,21 @@ export const SECTION_HEADER_BLOCK_H = 46;
 export const GEAR_SECTION_HEADER_H = SECTION_HEADER_BLOCK_H;
 /** Gap from UPGRADES header top to first upgrade row. */
 export const UPGRADE_SECTION_HEADER_GAP = 10;
-/** Space from last upgrade row to GEAR title (aligns with UPGRADES spacing feel). */
-export const MARGIN_UPGRADES_TO_GEAR = 14;
+/** Space from last upgrade row to GEAR title (+20 vs legacy for spacing between section plates). */
+export const MARGIN_UPGRADES_TO_GEAR = 34;
 /** Space from GEAR header rule to top of consumable cards. */
 export const MARGIN_GEAR_TO_CONSUMABLE = 5;
 export const GEAR_HEADER_LABEL_Y = UPGRADE_LAST_ROW_BOTTOM + MARGIN_UPGRADES_TO_GEAR;
 export const CONSUMABLE_H = 88;
 export const CONSUMABLE_GAP = 12;
-export const CONSUMABLE_W = Math.floor((UPGRADE_BUTTON_W - CONSUMABLE_GAP) / 2);
+export const CONSUMABLE_W = Math.floor((BOAT_SECTION_CONTENT_W - CONSUMABLE_GAP) / 2);
 export const CONSUMABLE_Y =
   GEAR_HEADER_LABEL_Y + GEAR_SECTION_HEADER_H + MARGIN_GEAR_TO_CONSUMABLE;
 // Upgrade detail panel (full-screen overlay when a button is tapped)
 export const UPGRADE_PANEL_BUY_Y = CANVAS_HEIGHT - 120;
 export const UPGRADE_PANEL_BUY_H = 60;
-export const DIVE_BUTTON_GAP = 20;
+/** +20 vs legacy so consumables can sit higher while `DIVE_BUTTON_Y` stays fixed. */
+export const DIVE_BUTTON_GAP = 40;
 export const BOAT_DECK_TOP_PAD = 20; // PANEL top → UPGRADES label; keep equal to DIVE_BUTTON_GAP
 /** Padding below DIVE inside the deck shell (visual breathing room). */
 export const BOAT_SHELL_BELOW_DIVE = 18;

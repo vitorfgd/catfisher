@@ -1,5 +1,5 @@
 /**
- * Boat menu layout: wide `BOAT_SHELL_*` deck + inset `BOAT_CONTENT_*` column (stats, upgrades, gear, DIVE).
+ * Boat menu layout: wide `BOAT_SHELL_*` deck + inset `BOAT_CONTENT_*` column (stats, upgrades, gear, go fish).
  */
 
 import { BOAT_CONTENT_W, BOAT_CONTENT_X, BOAT_SHELL_W, BOAT_SHELL_X } from '../core/Constants';

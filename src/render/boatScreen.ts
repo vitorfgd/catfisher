@@ -4,10 +4,11 @@ import type { UpgradeState } from '../core/Types';
 import {
   BAIT_COST,
   BAIT_MAX_STOCK,
-  BOAT_DECK_TOP_PAD,
-  BOAT_SHELL_BELOW_DIVE,
   BOAT_CONTENT_TEXT_PAD_X,
-  BOAT_SHELL_MAX_BOTTOM,
+  BOAT_MENU_DIVE_BUTTON_INNER_PAD_X,
+  BOAT_MENU_SECTION_CARD_PAD_Y,
+  BOAT_SECTION_CONTENT_W,
+  BOAT_SECTION_CONTENT_X,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   CONSUMABLE_GAP,
@@ -26,13 +27,12 @@ import {
   UPGRADE_MAX_LEVEL,
   UPGRADE_PANEL_BUY_H,
   UPGRADE_PANEL_BUY_Y,
-  BOAT_TITLE_LOGO_TOP,
+  UPGRADE_LAST_ROW_BOTTOM,
   BOAT_MENU_SCRIM_ALPHA,
   getBoatStatsCardTopY,
-  getBoatTitleLogoDrawSize,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
-import { getBoatShellHorizontal, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
+import { getBoatContentColumn, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
 import { Boat, C, t, tb } from './theme';
 import {
@@ -253,38 +253,30 @@ export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
   renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 }
 
-/** Main-menu chrome (stats, upgrades, dive, title). */
+/** Main-menu chrome (stats, upgrades, gear, go fish). */
 export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void {
   if (state.upgradePanelOpen !== null) {
     drawUpgradePanel(renderer, state, state.upgradePanelOpen);
     return;
   }
 
-  const { shellX, shellW } = getBoatShellHorizontal();
-  const { contentX, contentW, bankW, ldW, ldX } = getBoatStatsColumnLayout();
+  const deck = getBoatContentColumn();
+  const { contentX, bankW, ldW, ldX } = getBoatStatsColumnLayout();
   const padX = BOAT_CONTENT_TEXT_PAD_X;
-  const titleSz = getBoatTitleLogoDrawSize();
   const STATS_Y = getBoatStatsCardTopY();
   const STATS_H = 86;
   const statsCardR = 14;
+  const sectionPadY = BOAT_MENU_SECTION_CARD_PAD_Y;
+  const secX = BOAT_SECTION_CONTENT_X;
+  const secW = BOAT_SECTION_CONTENT_W;
 
   renderer.drawRectAlpha(C.bg, BOAT_MENU_SCRIM_ALPHA, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const firstU = getUpgradeButtonRect(0);
   const UPG_LABEL_Y = firstU.y - SECTION_HEADER_BLOCK_H - UPGRADE_SECTION_HEADER_GAP;
-  /** Match section header + `BOAT_DECK_TOP_PAD` (was still using old −32 when headers grew). */
-  const PANEL_Y = UPG_LABEL_Y - BOAT_DECK_TOP_PAD;
-  // Shell must include DIVE + BOAT_SHELL_BELOW_DIVE; capping to CANVAS_HEIGHT-EDGE was stealing inner padding
-  const diveBottom = DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT;
-  const targetShellBottom = diveBottom + BOAT_SHELL_BELOW_DIVE;
-  const shellBottom = Math.min(targetShellBottom, BOAT_SHELL_MAX_BOTTOM);
-  const PANEL_H = shellBottom - PANEL_Y;
 
-  renderer.drawRoundRectAlpha(Boat.shell, Boat.shellAlpha, shellX, PANEL_Y, shellW, PANEL_H, 22);
-  
-
-  // Stats — two side-by-side cards (Bank | Last dive)
-  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, contentX, STATS_Y, bankW, STATS_H, statsCardR);
+  // Stats — two side-by-side cards; column matches upgrades (`deck` = content column).
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, STATS_Y, bankW, STATS_H, statsCardR);
   renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, ldX, STATS_Y, ldW, STATS_H, statsCardR);
 
   const bankTextW = bankW - padX * 2;
@@ -315,10 +307,15 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     renderer.drawText(durLabel, rightX, STATS_Y + 50, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
   } else {
     renderer.drawText('No run yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, Boat.labelMuted, 'left', '600'));
-    renderer.drawText('Tap DIVE to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
+    renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
   }
 
-  drawSectionHeader(renderer, contentX, UPG_LABEL_Y, contentW, 'UPGRADES', Boat.sectionMint);
+  const upgradesCardTop = UPG_LABEL_Y - sectionPadY;
+  const upgradesCardBottom = UPGRADE_LAST_ROW_BOTTOM + sectionPadY;
+  const upgradesCardH = upgradesCardBottom - upgradesCardTop;
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, upgradesCardTop, deck.w, upgradesCardH, 18);
+
+  drawSectionHeader(renderer, secX, UPG_LABEL_Y, secW, 'UPGRADES', Boat.sectionMint);
 
   for (let i = 0; i < UPGRADE_KEYS.length; i += 1) {
     const key = UPGRADE_KEYS[i];
@@ -337,9 +334,14 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     );
   }
 
-  drawSectionHeader(renderer, contentX, GEAR_HEADER_LABEL_Y, contentW, 'GEAR', Boat.sectionSand);
+  const gearCardTop = GEAR_HEADER_LABEL_Y - sectionPadY;
+  const gearCardBottom = CONSUMABLE_Y + CONSUMABLE_H + sectionPadY;
+  const gearCardH = gearCardBottom - gearCardTop;
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, gearCardTop, deck.w, gearCardH, 18);
 
-  const cx = contentX;
+  drawSectionHeader(renderer, secX, GEAR_HEADER_LABEL_Y, secW, 'GEAR', Boat.sectionSand);
+
+  const cx = secX;
   drawConsumableCard(
     renderer,
     'net',
@@ -365,17 +367,22 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     CONSUMABLE_H,
   );
 
-  renderer.drawRoundRect(Boat.dive, contentX, DIVE_BUTTON_Y, contentW, DIVE_BUTTON_HEIGHT, 16);
+  const diveCardTop = DIVE_BUTTON_Y - sectionPadY;
+  const diveCardBottom = DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT + sectionPadY;
+  const diveCardH = diveCardBottom - diveCardTop;
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, diveCardTop, deck.w, diveCardH, 18);
+
+  const diveInnerPad = BOAT_MENU_DIVE_BUTTON_INNER_PAD_X;
+  const diveX = secX + diveInnerPad;
+  const diveW = secW - diveInnerPad * 2;
+  renderer.drawRoundRect(Boat.dive, diveX, DIVE_BUTTON_Y, diveW, DIVE_BUTTON_HEIGHT, 14);
   const diveHiH = 18;
   const diveHiY = DIVE_BUTTON_Y + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
-  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, contentX + 3, diveHiY, contentW - 6, diveHiH, 10);
-  renderer.drawText('DIVE', contentX, DIVE_BUTTON_Y + DIVE_BUTTON_LABEL_Y_OFFSET, contentW, DIVE_BUTTON_HEIGHT, {
-    ...t(36, Boat.card, 'center', '800'),
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
+  renderer.drawText('GO FISH', diveX, DIVE_BUTTON_Y + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
+    ...t(32, Boat.card, 'center', '800'),
     useLayoutMaxWidth: false,
   });
-
-  const titleX = (CANVAS_WIDTH - titleSz.drawW) / 2;
-  renderer.drawImage({ id: AssetIds.titleLogo }, titleX, BOAT_TITLE_LOGO_TOP, titleSz.drawW, titleSz.drawH);
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
