@@ -111,6 +111,9 @@ export interface RenderState {
   /** Net consumable full-screen VFX; null when idle. */
   netVfx: { elapsed: number } | null;
 
+  /** Harpoon gun slide-in after tap-fire; `-1` = rest position below frame. */
+  harpoonGunAnimElapsed: number;
+
   /** Pulse timer after using net/bait on the dive HUD (seconds). */
   hudConsumableFlash: { net: number; bait: number };
 

@@ -8,18 +8,23 @@ import {
   NET_VFX_FADE_SEC,
   NET_VFX_SLIDE_GROW_SEC,
   NET_VFX_TOTAL_SEC,
+  HARPOON_GUN_ANIM_RISE_SEC,
+  HARPOON_GUN_ANIM_TOTAL_SEC,
+  HARPOON_GUN_DRAW_W,
+  HARPOON_GUN_DRAW_H,
+  HARPOON_GUN_SLIDE_HIDDEN_PX,
   SHARK_BITE_VFX_APPROACH_SEC,
   SHARK_BITE_VFX_CLAMP_JITTER_SEC,
   SHARK_BITE_VFX_TOTAL_SEC,
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
-import { getTurretMuzzleWorld } from '../core/SpearSystem';
 import { AssetIds } from '../shared/AssetIds';
 import { drawBoatMenuUi, drawBoatScreen } from './boatScreen';
 import { drawOceanTransition, type OceanTransitionDraw } from './oceanTransition';
 import { drawHud, getHudMoneyLayout } from './hud';
 import { C, t, td, tb } from './theme';
 import { actionViewFocus, getActionViewZoomForSession } from '../core/ActionViewTransform';
+import { getHarpoonMuzzleWorldFromGrip } from '../core/SpearSystem';
 
 /** 2D art aspect (width/height) for the center-screen reveal */
 const TREASURE_CINEMATIC_ASPECT: Record<'closed' | 'open', number> = {
@@ -244,14 +249,16 @@ function drawTether(renderer: GameRenderer, fx: number, fy: number, tx2: number,
   renderer.pop();
 }
 
-function drawSpear(
+function drawSpearTether(
   renderer: GameRenderer,
-  playerX: number,
-  playerY: number,
+  tetherMuzzleX: number,
+  tetherMuzzleY: number,
   spear: RenderSpearState,
 ): void {
-  const muzzle = getTurretMuzzleWorld(playerX, playerY);
-  drawTether(renderer, muzzle.x, muzzle.y, spear.x, spear.y);
+  drawTether(renderer, tetherMuzzleX, tetherMuzzleY, spear.x, spear.y);
+}
+
+function drawSpearBody(renderer: GameRenderer, spear: RenderSpearState): void {
   if (spear.carryingFishType !== null) {
     const off = 28;
     drawFishSprite(
@@ -473,6 +480,50 @@ function drawFloatingTexts(renderer: GameRenderer, texts: RenderState['floatingT
   }
 }
 
+function netVfxSmoothstep01(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return u * u * (3 - 2 * u);
+}
+
+function harpoonGunSlidePixels(elapsed: number): number {
+  const hidden = HARPOON_GUN_SLIDE_HIDDEN_PX;
+  if (elapsed < 0) return hidden;
+  const riseEnd = HARPOON_GUN_ANIM_RISE_SEC;
+  const total = HARPOON_GUN_ANIM_TOTAL_SEC;
+  if (elapsed <= riseEnd) {
+    const t = riseEnd > 1e-6 ? Math.min(1, Math.max(0, elapsed / riseEnd)) : 1;
+    const u = netVfxSmoothstep01(t);
+    return hidden * (1 - u);
+  }
+  const fallDur = Math.max(1e-6, total - riseEnd);
+  const t = Math.min(1, Math.max(0, (elapsed - riseEnd) / fallDur));
+  const u = netVfxSmoothstep01(t);
+  return hidden * u;
+}
+
+/**
+ * First-person harpoon: grip at the player anchor (bottom-centre), art extends upward; barrel follows `aimAngle`.
+ * `slide` is extra +Y on the grip (larger = more hidden below the frame).
+ */
+function drawFirstPersonHarpoonGun(
+  renderer: GameRenderer,
+  state: RenderState,
+  slide: number,
+): void {
+  const drawW = HARPOON_GUN_DRAW_W;
+  const drawH = HARPOON_GUN_DRAW_H;
+  const aim = state.player.aimAngle;
+  const rotDeg = (Math.atan2(-Math.cos(aim), -Math.sin(aim)) * 180) / Math.PI;
+  const gripX = state.player.x;
+  const gripY = state.player.y + slide;
+
+  renderer.pushTranslate(gripX, gripY);
+  renderer.pushRotate(rotDeg, 0, 0);
+  renderer.drawImage({ id: AssetIds.gun1 }, -drawW * 0.5, -drawH, drawW, drawH);
+  renderer.pop();
+  renderer.pop();
+}
+
 function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState): void {
   const actionZoomed = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
   const isFtue = state.phase === GamePhase.Action && state.ftueActive;
@@ -526,7 +577,34 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   if (isFtue) {
     drawFtueHandWorld(renderer, state);
   }
-  for (const spear of state.spears) drawSpear(renderer, state.player.x, state.player.y, spear);
+
+  let tetherMuzzleX = state.player.x;
+  let tetherMuzzleY = state.player.y;
+  let gunSlide = 0;
+  if (actionZoomed) {
+    gunSlide = harpoonGunSlidePixels(state.harpoonGunAnimElapsed);
+    const gripY = state.player.y + gunSlide;
+    const muzzleW = getHarpoonMuzzleWorldFromGrip(
+      state.player.x,
+      gripY,
+      state.player.aimAngle,
+    );
+    tetherMuzzleX = muzzleW.x;
+    tetherMuzzleY = muzzleW.y;
+  } else {
+    const muzzleW = getHarpoonMuzzleWorldFromGrip(
+      state.player.x,
+      state.player.y,
+      state.player.aimAngle,
+    );
+    tetherMuzzleX = muzzleW.x;
+    tetherMuzzleY = muzzleW.y;
+  }
+  for (const spear of state.spears) drawSpearTether(renderer, tetherMuzzleX, tetherMuzzleY, spear);
+  if (actionZoomed) {
+    drawFirstPersonHarpoonGun(renderer, state, gunSlide);
+  }
+  for (const spear of state.spears) drawSpearBody(renderer, spear);
   drawParticles(renderer, state.particles);
   drawFloatingTexts(renderer, state.floatingTexts);
   if (actionZoomed) {
@@ -537,11 +615,6 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
 
 const VFX_NET_NATURAL_W = 1024;
 const VFX_NET_NATURAL_H = 1536;
-
-function netVfxSmoothstep01(t: number): number {
-  const u = Math.min(1, Math.max(0, t));
-  return u * u * (3 - 2 * u);
-}
 
 /** Screen-space net sweep: below HUD, above world (drawn after `drawUnderwaterPlayingField`). */
 function drawNetConsumableVfx(renderer: GameRenderer, elapsed: number): void {
@@ -722,6 +795,9 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   ) {
     drawNetConsumableVfx(renderer, state.netVfx.elapsed);
   }
+  /*if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
+    drawThirdPersonHelmetOverlay(renderer);
+  }*/
   drawActionSurfaceOverlays(renderer, state);
 
   if (state.phase === GamePhase.Breaching && state.oceanTransition != null) {

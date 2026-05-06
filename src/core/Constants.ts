@@ -289,6 +289,19 @@ export const NET_VFX_FADE_SEC = 0.32;
 export const NET_VFX_TOTAL_SEC = NET_VFX_SLIDE_GROW_SEC + NET_VFX_FADE_SEC;
 /** Fish are resolved the frame elapsed reaches this (full cover, before fade dominates). */
 export const NET_VFX_CATCH_AT_SEC = NET_VFX_SLIDE_GROW_SEC;
+
+/** First-person harpoon gun: slides up from below screen on fire, then settles back. */
+export const HARPOON_GUN_ANIM_RISE_SEC = 0.12;
+export const HARPOON_GUN_ANIM_FALL_SEC = 0.34;
+export const HARPOON_GUN_ANIM_TOTAL_SEC = HARPOON_GUN_ANIM_RISE_SEC + HARPOON_GUN_ANIM_FALL_SEC;
+/** Extra downward offset on the grip anchor when idle/hidden (world +Y). Keep modest so the barrel still peeks in. */
+export const HARPOON_GUN_SLIDE_HIDDEN_PX = 72;
+/** Logical draw width for `gun_1.png` in the action view (height follows art aspect). */
+export const HARPOON_GUN_DRAW_W = 400;
+/** Matches `gun_1.png` aspect — used for muzzle offset from grip in world space (see SpearSystem). */
+const HARPOON_GUN_NATURAL_W = 1647;
+const HARPOON_GUN_NATURAL_H = 1372;
+export const HARPOON_GUN_DRAW_H = (HARPOON_GUN_DRAW_W * HARPOON_GUN_NATURAL_H) / HARPOON_GUN_NATURAL_W;
 export const BAIT_MAX_STOCK = 3;
 export const BAIT_DURATION = 6.0;            // seconds bait remains active
 /** Dropped at cave center; in-world `iconBait` draw size (menu uses same asset at ~40px in HUD) */

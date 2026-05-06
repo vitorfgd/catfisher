@@ -1,11 +1,25 @@
 import type { FishState, FishType, PlayerState, SpearState } from './Types';
 import { SpearMode } from './Types';
-import { SPEAR_SPEED } from './Constants';
+import { HARPOON_GUN_DRAW_H, SPEAR_SPEED } from './Constants';
 import { getFishHitbox } from './FishSystem';
 
-/** First-person tether origin: bottom-center of the action view. */
-export function getTurretMuzzleWorld(playerX: number, playerY: number): { x: number; y: number } {
+/** Bottom-centre grip / turret anchor in world space (`PLAYER_X`, `PLAYER_Y`). */
+export function getHarpoonGripWorld(playerX: number, playerY: number): { x: number; y: number } {
   return { x: playerX, y: playerY };
+}
+
+/** World-space muzzle (top-centre of `gun_1` art) when the grip is at `(gripX, gripY)` and the barrel follows `aimAngle`. */
+export function getHarpoonMuzzleWorldFromGrip(
+  gripX: number,
+  gripY: number,
+  aimAngle: number,
+): { x: number; y: number } {
+  const drawH = HARPOON_GUN_DRAW_H;
+  const rotRad = Math.atan2(-Math.cos(aimAngle), -Math.sin(aimAngle));
+  return {
+    x: gripX - drawH * Math.sin(rotRad),
+    y: gripY - drawH * Math.cos(rotRad),
+  };
 }
 
 export interface DeliveredCatch {
@@ -22,7 +36,7 @@ export function fireSpear(
   aimAngle: number,
   maxDistance: number,
 ): SpearState {
-  const muzzle = getTurretMuzzleWorld(player.x, player.y);
+  const muzzle = getHarpoonMuzzleWorldFromGrip(player.x, player.y, aimAngle);
   return {
     id,
     x: muzzle.x,
@@ -81,7 +95,7 @@ export function updateSpears(
     }
 
     if (spear.mode === SpearMode.Returning) {
-      const { x: targetX, y: targetY } = getTurretMuzzleWorld(player.x, player.y);
+      const { x: targetX, y: targetY } = getHarpoonMuzzleWorldFromGrip(player.x, player.y, player.aimAngle);
       const dx = targetX - spear.x;
       const dy = targetY - spear.y;
       const dist = Math.hypot(dx, dy);

@@ -198,6 +198,12 @@ export interface FullGameState {
   /** Net throw sweep VFX; null when idle. */
   netVfx: NetVfxState | null;
 
+  /**
+   * Harpoon gun kick animation after firing (`0`..`HARPOON_GUN_ANIM_TOTAL_SEC`).
+   * `-1` = idle (gun rests below the visible bottom).
+   */
+  harpoonGunAnimElapsed: number;
+
   /** HUD consumable button pulse after use (seconds remaining). */
   hudConsumableFlash: { net: number; bait: number };
 

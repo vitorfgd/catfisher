@@ -66,4 +66,10 @@ export const AssetIds = {
   vfxTeethClamped: 'vfxTeethClamped',
   /** Full-screen net sweep when using the net consumable */
   vfxNet: 'vfxNet',
+
+  /** Bottom-anchored diving helmet (third-person frame) in underwater action. */
+  helmet: 'helmet',
+
+  /** First-person harpoon gun (pivot top-center = muzzle / rope origin). */
+  gun1: 'gun1',
 } as const;

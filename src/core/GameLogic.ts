@@ -48,6 +48,7 @@ import {
   NET_MAX_STOCK,
   NET_VFX_CATCH_AT_SEC,
   NET_VFX_TOTAL_SEC,
+  HARPOON_GUN_ANIM_TOTAL_SEC,
   OXYGEN_DRAIN_RATE,
   PLAYER_X,
   PLAYER_Y,
@@ -114,7 +115,8 @@ import {
   attachCatchToSpear,
   detectSpearFishCollisions,
   fireSpear,
-  getTurretMuzzleWorld,
+  getHarpoonGripWorld,
+  getHarpoonMuzzleWorldFromGrip,
   removeResolvedSpears,
   returnSpearWithoutCatch,
   updateSpears,
@@ -294,6 +296,7 @@ export function createInitialState(): FullGameState {
     pendingEvents: [],
     hudConsumableFlash: { net: 0, bait: 0 },
     netVfx: null,
+    harpoonGunAnimElapsed: -1,
   };
 }
 
@@ -328,6 +331,7 @@ function resetForNewDive(state: FullGameState): void {
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
   state.netVfx = null;
+  state.harpoonGunAnimElapsed = -1;
 }
 
 function beginBreaching(state: FullGameState): void {
@@ -337,6 +341,7 @@ function beginBreaching(state: FullGameState): void {
   state.breachTimer = 0;
   state.oceanBubbles = [];
   state.oceanBubblesSpawned = false;
+  state.harpoonGunAnimElapsed = -1;
 }
 
 function finalizeRunToBoat(state: FullGameState): void {
@@ -360,6 +365,7 @@ function finalizeRunToBoat(state: FullGameState): void {
   state.sharkBiteTeethElapsed = -1;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
+  state.harpoonGunAnimElapsed = -1;
   state.pendingEvents.push({
     type: 'runEnded',
     earnings: state.sessionEarnings,
@@ -678,9 +684,9 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       state.player.y,
       getActionViewZoomForSession(state.sessionTime, state.ftueActive),
     );
-    const muzzle = getTurretMuzzleWorld(state.player.x, state.player.y);
-    const dx = w.x - muzzle.x;
-    const dy = w.y - muzzle.y;
+    const grip = getHarpoonGripWorld(state.player.x, state.player.y);
+    const dx = w.x - grip.x;
+    const dy = w.y - grip.y;
     if (dx !== 0 || dy !== 0) {
       state.player.aimAngle = Math.atan2(dy, dx);
     }
@@ -695,6 +701,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         getSpearMaxDistance(state.upgrades),
       ),
     );
+    state.harpoonGunAnimElapsed = 0;
     state.player.shootCooldown = getShootCooldown(state.upgrades);
     state.pendingEvents.push({ type: 'spearFired' });
     break;
@@ -1039,6 +1046,12 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
 
   if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
     updateNetVfx(state, dt, getGameRng());
+    if (state.harpoonGunAnimElapsed >= 0) {
+      state.harpoonGunAnimElapsed += dt;
+      if (state.harpoonGunAnimElapsed >= HARPOON_GUN_ANIM_TOTAL_SEC) {
+        state.harpoonGunAnimElapsed = -1;
+      }
+    }
   }
 
   if (state.sharkBiteTeethElapsed >= 0) {
@@ -1196,7 +1209,11 @@ export function getRenderState(state: FullGameState): RenderState {
     spears: state.spears.map((spear) => {
       let carryingFishScale = REELED_FISH_SCALE_START;
       if (spear.caughtFishType !== null) {
-        const anchor = getTurretMuzzleWorld(state.player.x, state.player.y);
+        const anchor = getHarpoonMuzzleWorldFromGrip(
+          state.player.x,
+          state.player.y,
+          state.player.aimAngle,
+        );
         const dist = Math.hypot(anchor.x - spear.x, anchor.y - spear.y);
         const startDist = Math.max(1, spear.caughtFishStartDistance);
         const progress = Math.min(1, Math.max(0, 1 - dist / startDist));
@@ -1290,6 +1307,7 @@ export function getRenderState(state: FullGameState): RenderState {
     sharkBiteFlash: state.sharkBiteFlash,
     sharkBiteTeethElapsed: state.sharkBiteTeethElapsed,
     netVfx: state.netVfx != null ? { elapsed: state.netVfx.elapsed } : null,
+    harpoonGunAnimElapsed: state.harpoonGunAnimElapsed,
     hudConsumableFlash: { ...state.hudConsumableFlash },
     treasureCinematic: (() => {
       const tr = state.treasureReveal;
