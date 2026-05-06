@@ -30,27 +30,46 @@ export function getHudMoneyLayout(moneyDigits: string): {
   iconCx: number;
   iconCy: number;
   iconSize: number;
+  textX: number;
+  textW: number;
 } {
-  const mW = Math.max(110, moneyDigits.length * 16 + 56);
   const mX = 12;
-  const pillH = 52;
-  const mY = OXYGEN_STRIP_Y + HUD_TIME_STRIP_HEIGHT + MONEY_UNDER_OXYGEN_GAP;
+  const padX = 10;
+  const padY = 6;
+  const gap = 6;
   const iconSize = 26;
-  const iconCx = mX + 9 + iconSize / 2;
-  const iconCy = mY + (pillH - iconSize) / 2 + iconSize / 2;
-  return { mW, mX, mY, pillH, iconCx, iconCy, iconSize };
+  /** ~px per digit for `tb(26, …)` coin label (stroke adds a little width). */
+  const digitW = 16;
+  const textW = Math.max(12, Math.ceil(moneyDigits.length * digitW) + 4);
+  const mW = padX + iconSize + gap + textW + padX;
+  const pillH = iconSize + padY * 2;
+  const mY = OXYGEN_STRIP_Y + HUD_TIME_STRIP_HEIGHT + MONEY_UNDER_OXYGEN_GAP;
+  const iconCx = mX + padX + iconSize / 2;
+  const iconCy = mY + pillH / 2;
+  const textX = mX + padX + iconSize + gap;
+  return { mW, mX, mY, pillH, iconCx, iconCy, iconSize, textX, textW };
 }
 
 export function drawHud(renderer: GameRenderer, state: RenderState): void {
   const W = CANVAS_WIDTH;
 
   const ms = `${state.hudMoneyDisplay}`;
-  const { mW, mX, mY, pillH, iconSize } = getHudMoneyLayout(ms);
-  renderer.drawRoundRectAlpha(C.bg, 0.90, mX, mY, mW, pillH, 26);
-  renderer.drawEllipse(C.gold, mX + 22, mY + pillH / 2, 12, 12);
-  renderer.drawEllipse('#7A4010', mX + 22, mY + pillH / 2, 6, 6);
-  renderer.drawImage({ id: AssetIds.iconCoin }, mX + 9, mY + (pillH - iconSize) / 2, iconSize, iconSize);
-  renderer.drawText(ms, mX + 40, mY, mW - 48, pillH, tb(26, C.gold, 'left'));
+  const { mW, mX, mY, pillH, iconSize, iconCx, iconCy, textX, textW } = getHudMoneyLayout(ms);
+  const pillR = Math.min(20, Math.floor(pillH / 2));
+  renderer.drawRoundRectAlpha(C.bg, 0.90, mX, mY, mW, pillH, pillR);
+  renderer.drawEllipse(C.gold, iconCx, iconCy, 12, 12);
+  renderer.drawEllipse('#7A4010', iconCx, iconCy, 6, 6);
+  renderer.drawImage(
+    { id: AssetIds.iconCoin },
+    iconCx - iconSize / 2,
+    mY + (pillH - iconSize) / 2,
+    iconSize,
+    iconSize,
+  );
+  renderer.drawText(ms, textX, mY, textW, pillH, {
+    ...tb(26, C.gold, 'left'),
+    useLayoutMaxWidth: false,
+  });
 
   const btns: Array<{ id: 'bait' | 'net'; cx: number; stock: number }> = [
     { id: 'bait', cx: HUD_BAIT_BUTTON_CX, stock: state.consumables.bait },

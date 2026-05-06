@@ -29,11 +29,3 @@ export function getBoatStatsColumnLayout(gapPx = BOAT_STATS_COLUMN_GAP_PX): {
   const ldX = contentX + bankW + gapPx;
   return { contentX, contentW, bankW, ldW, ldX };
 }
-
-/** Bank/Last-dive card: same outer width as the deck shell (matches shell framing upgrades). */
-export function getBoatStatsCardRect(
-  statsY: number,
-  statsH: number,
-): { shellX: number; shellW: number; statsY: number; statsH: number } {
-  return { ...getBoatShellHorizontal(), statsY, statsH };
-}

@@ -32,7 +32,7 @@ import {
   getBoatTitleLogoDrawSize,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
-import { getBoatShellHorizontal, getBoatStatsCardRect, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
+import { getBoatShellHorizontal, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
 import { Boat, C, t, tb } from './theme';
 import {
@@ -80,8 +80,8 @@ function drawUpgradeButton(
   const infoX = x + iconZone + 12;
   const infoW = width - iconZone - 96;
   const subStyle = { ...t(14, Boat.labelMuted, 'left', '500'), useLayoutMaxWidth: false } as const;
-  renderer.drawText(UPGRADE_SUBTEXT[id], infoX, y + 6, infoW, 38, subStyle);
-  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 38, infoW, 28, t(19, nameC, 'left', '800'));
+  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 6, infoW, 28, t(19, nameC, 'left', '800'));
+  renderer.drawText(UPGRADE_SUBTEXT[id], infoX, y + 28, infoW, 38, subStyle);
 
   const pipY = y + 72;
   const pipR = 6;
@@ -223,9 +223,9 @@ function drawConsumableCard(
   const infoX = x + iconAreaSz + 12;
   const infoW = width - (infoX - x) - 72;
   const noFit = { useLayoutMaxWidth: false } as const;
-  renderer.drawText(CONSUMABLE_NAMES[id], infoX, y + 28, infoW, 36, t(20, nameC, 'left', '800', noFit));
+  renderer.drawText(CONSUMABLE_NAMES[id], infoX, y + 18, infoW, 36, t(20, nameC, 'left', '800', noFit));
 
-  const pipY = y + 66;
+  const pipY = y + 60;
   const pipR = 6;
   const pip0 = infoX + pipR;
   const pipGap = 16;
@@ -247,7 +247,6 @@ function drawSectionHeader(
   const H = SECTION_HEADER_BLOCK_H;
   renderer.drawRectAlpha(accent, 0.85, x, y + 8, 4, 28);
   renderer.drawText(label, x + 12, y + 4, w - 12, H - 14, t(30, accent, 'left', '800'));
-  renderer.drawRectAlpha(Boat.cardLine, 0.5, x, y + H - 1, w, 1);
 }
 
 export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
@@ -267,7 +266,7 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const titleSz = getBoatTitleLogoDrawSize();
   const STATS_Y = getBoatStatsCardTopY();
   const STATS_H = 86;
-  const statsCard = getBoatStatsCardRect(STATS_Y, STATS_H);
+  const statsCardR = 14;
 
   renderer.drawRectAlpha(C.bg, BOAT_MENU_SCRIM_ALPHA, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
@@ -282,19 +281,12 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const PANEL_H = shellBottom - PANEL_Y;
 
   renderer.drawRoundRectAlpha(Boat.shell, Boat.shellAlpha, shellX, PANEL_Y, shellW, PANEL_H, 22);
-  renderer.drawRoundRectAlpha(Boat.shellRim, 0.4, shellX + 1, PANEL_Y + 1, shellW - 2, 3, 2);
+  
 
-  // Stats — same outer width as deck shell (upgrades sit in the inset column below)
-  renderer.drawRoundRectAlpha(
-    Boat.statsCard,
-    Boat.statsAlpha,
-    statsCard.shellX,
-    statsCard.statsY,
-    statsCard.shellW,
-    statsCard.statsH,
-    16,
-  );
-  renderer.drawRectAlpha(Boat.cardLine, 0.5, contentX + bankW, STATS_Y + 10, 1, STATS_H - 20);
+  // Stats — two side-by-side cards (Bank | Last dive)
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, contentX, STATS_Y, bankW, STATS_H, statsCardR);
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, ldX, STATS_Y, ldW, STATS_H, statsCardR);
+
   const bankTextW = bankW - padX * 2;
   const ldTextW = ldW - padX * 2;
   renderer.drawText('BANK', contentX + padX, STATS_Y + 8, bankTextW, 20, t(14, Boat.labelMuted, 'left', '700'));
@@ -305,16 +297,22 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     const dur = Math.max(0, state.lastRunDurationSec);
     const durLabel = dur >= 60
       ? `${Math.floor(dur / 60)}m ${Math.floor(dur % 60)}s`
-      : `${Math.floor(dur)}s`;
-    renderer.drawText(`$${state.lastRunEarnings}`, ldX + padX, STATS_Y + 32, ldTextW, 30, tb(28, C.white, 'left'));
+      : `${Math.floor(dur)} sec.`;
+    const rightColW = 78;
+    const gapMid = 8;
+    const moneyW = Math.max(80, ldTextW - rightColW - gapMid);
     renderer.drawText(
-      `${state.lastRunCatchCount} fish · ${durLabel}`,
+      `$${state.lastRunEarnings}`,
       ldX + padX,
-      STATS_Y + 64,
-      ldTextW,
-      20,
-      t(15, Boat.labelMuted, 'left', '600'),
+      STATS_Y + 38,
+      moneyW,
+      34,
+      tb(28, C.white, 'left'),
     );
+    const rightX = ldX + ldW - padX - rightColW;
+    const fishLine = `${state.lastRunCatchCount} fish`;
+    renderer.drawText(fishLine, rightX, STATS_Y + 28, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
+    renderer.drawText(durLabel, rightX, STATS_Y + 50, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
   } else {
     renderer.drawText('No run yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, Boat.labelMuted, 'left', '600'));
     renderer.drawText('Tap DIVE to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
@@ -372,7 +370,7 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const diveHiY = DIVE_BUTTON_Y + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
   renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, contentX + 3, diveHiY, contentW - 6, diveHiH, 10);
   renderer.drawText('DIVE', contentX, DIVE_BUTTON_Y + DIVE_BUTTON_LABEL_Y_OFFSET, contentW, DIVE_BUTTON_HEIGHT, {
-    ...tb(36, C.white, 'center'),
+    ...t(36, Boat.card, 'center', '800'),
     useLayoutMaxWidth: false,
   });
 

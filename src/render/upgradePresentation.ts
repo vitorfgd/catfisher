@@ -10,7 +10,7 @@ export const UPGRADE_LABELS: Record<keyof UpgradeState, string> = {
 
 /** One-line effect hint on the boat upgrade rows (replaces category kickers). */
 export const UPGRADE_SUBTEXT: Record<keyof UpgradeState, string> = {
-  speargun: 'Spear range, reload & cash per fish',
+  speargun: 'Range, reload time, & cash per fish',
   haul: 'More money on every catch',
   oxygen: 'Longer dive before time runs out',
 };
