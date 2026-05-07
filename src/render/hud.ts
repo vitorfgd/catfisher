@@ -1,6 +1,7 @@
 import {
+  CANVAS_HEIGHT,
   CANVAS_WIDTH,
-  HUD_TIME_STRIP_HEIGHT,
+  OXYGEN_DAMAGE_VFX_SEC,
   PUFFER_TIME_BONUS,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
@@ -19,8 +20,11 @@ const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {
   bait: AssetIds.iconBait,
 };
 
-const OXYGEN_STRIP_Y = 0;
-const MONEY_UNDER_OXYGEN_GAP = 8;
+const MONEY_PILL_Y = 12;
+const OXYGEN_TANK_X = 14;
+const OXYGEN_TANK_Y = Math.round(CANVAS_HEIGHT * 0.39);
+const OXYGEN_TANK_W = 54;
+const OXYGEN_TANK_H = 188;
 
 export function getHudMoneyLayout(moneyDigits: string): {
   mW: number;
@@ -43,11 +47,59 @@ export function getHudMoneyLayout(moneyDigits: string): {
   const textW = Math.max(12, Math.ceil(moneyDigits.length * digitW) + 4);
   const mW = padX + iconSize + gap + textW + padX;
   const pillH = iconSize + padY * 2;
-  const mY = OXYGEN_STRIP_Y + HUD_TIME_STRIP_HEIGHT + MONEY_UNDER_OXYGEN_GAP;
+  const mY = MONEY_PILL_Y;
   const iconCx = mX + padX + iconSize / 2;
   const iconCy = mY + pillH / 2;
   const textX = mX + padX + iconSize + gap;
   return { mW, mX, mY, pillH, iconCx, iconCy, iconSize, textX, textW };
+}
+
+function drawOxygenTank(renderer: GameRenderer, state: RenderState): void {
+  const tFrac = Math.max(0, Math.min(1, state.timeLeftFraction));
+  const barColor = tFrac > 0.5 ? C.teal : tFrac > 0.25 ? C.warn : C.danger;
+  const secLeft = Math.max(0, Math.ceil(state.roundTimeLeft));
+  const damageP = state.oxygenDamageTimer > 0
+    ? Math.min(1, state.oxygenDamageTimer / OXYGEN_DAMAGE_VFX_SEC)
+    : 0;
+  const shake = damageP > 0 ? Math.sin(Date.now() / 24) * 3.5 * damageP : 0;
+  const x = OXYGEN_TANK_X + shake;
+  const y = OXYGEN_TANK_Y;
+  const innerPad = 7;
+  const innerX = x + innerPad;
+  const innerY = y + 30;
+  const innerW = OXYGEN_TANK_W - innerPad * 2;
+  const innerH = OXYGEN_TANK_H - 58;
+  const fillH = Math.max(6, innerH * tFrac);
+  const fillY = innerY + innerH - fillH;
+
+  renderer.drawRoundRectAlpha(C.bg, 0.92, x, y, OXYGEN_TANK_W, OXYGEN_TANK_H, 18);
+  renderer.drawRoundRectAlpha(barColor, 0.16 + damageP * 0.16, x - 4, y - 4, OXYGEN_TANK_W + 8, OXYGEN_TANK_H + 8, 20);
+  renderer.drawText('O2', x, y + 7, OXYGEN_TANK_W, 22, tb(17, C.white, 'center'));
+  renderer.drawRoundRect(C.border, innerX - 2, innerY - 2, innerW + 4, innerH + 4, 12);
+  renderer.drawRoundRectAlpha('#06131b', 0.96, innerX, innerY, innerW, innerH, 10);
+  renderer.drawRoundRect(barColor, innerX, fillY, innerW, fillH, 9);
+  renderer.drawRoundRectAlpha('#ffffff', 0.12, innerX + 4, fillY + 4, Math.max(5, innerW * 0.28), Math.max(5, fillH - 8), 5);
+  renderer.drawText(`${secLeft}s`, x, y + OXYGEN_TANK_H - 28, OXYGEN_TANK_W, 22, t(15, C.white, 'center', '800'));
+
+  if (damageP > 0) {
+    const a = damageP.toFixed(2);
+    renderer.drawRectAlpha(`rgba(255,68,68,${a})`, 0.24, innerX + 6, innerY + 18, innerW - 12, 4);
+    renderer.drawRectAlpha(`rgba(255,68,68,${a})`, 0.22, innerX + 18, innerY + 58, 4, 42);
+    renderer.drawText(
+      `-${state.oxygenDamageAmount}s O2`,
+      x + OXYGEN_TANK_W + 6,
+      y + 58,
+      116,
+      30,
+      { ...tb(19, `rgba(255,90,70,${a})`, 'left'), strokeColor: 'rgba(3,10,16,0.9)', strokeWidth: 3 },
+    );
+    for (let i = 0; i < 5; i += 1) {
+      const p = (Date.now() / 520 + i * 0.19) % 1;
+      const bx = x + OXYGEN_TANK_W + 8 + i * 6;
+      const by = y + 122 - p * 72;
+      renderer.drawEllipseAlpha('#b8f7ff', (1 - p) * damageP * 0.72, bx, by, 4 + i % 2, 4 + i % 2);
+    }
+  }
 }
 
 export function drawHud(renderer: GameRenderer, state: RenderState): void {
@@ -145,7 +197,7 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     const glow = `rgba(80,220,255,${alpha})`;
     const cx = hudCenterX;
     const cy = timeBonusTop + timeBonusH / 2;
-    renderer.drawText(`+${PUFFER_TIME_BONUS}s TIME`, cx - 190, cy - timeBonusH / 2, 380, timeBonusH, td(timeBonusFontSize, glow, 'center'));
+    renderer.drawText(`+${PUFFER_TIME_BONUS}s O2`, cx - 190, cy - timeBonusH / 2, 380, timeBonusH, td(timeBonusFontSize, glow, 'center'));
   }
 
   if (state.harpoonStatus === 'LOAD' || state.harpoonStatus === 'REEL' || state.harpoonStatus === 'HAUL') {
@@ -163,11 +215,10 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     renderer.drawText(label, cx - 180, cy - 32, 360, 64, td(52, color, 'center'));
   }
 
-  const STRIP_Y = OXYGEN_STRIP_Y;
   if (state.timeLeftFraction < 0.30) {
     const urgency = state.timeLeftFraction < 0.12 ? 1 : 0;
     const blink = urgency ? (Math.floor(Date.now() / 200) % 2 === 0 ? 1.0 : 0.0) : (0.7 + 0.3 * Math.sin(Date.now() / 280));
-    const label = urgency ? '⚠ OUT OF TIME' : 'LOW TIME';
+    const label = urgency ? 'OUT OF AIR' : 'LOW O2';
     renderer.drawText(
       label,
       0,
@@ -178,21 +229,5 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     );
   }
 
-  const STRIP_H = HUD_TIME_STRIP_HEIGHT;
-  renderer.drawRectAlpha(C.bg, 0.92, 0, STRIP_Y, W, STRIP_H);
-  renderer.drawRectAlpha(C.teal, 0.30, 0, STRIP_Y, W, 1);
-
-  const oxyBarH = 30;
-  const oxyBarY = STRIP_Y + (STRIP_H - oxyBarH) / 2;
-  const tFrac = Math.max(0, state.timeLeftFraction);
-  const barColor = tFrac > 0.5 ? C.teal : tFrac > 0.25 ? C.warn : C.danger;
-  const secLeft = Math.max(0, Math.ceil(state.roundTimeLeft));
-
-  renderer.drawText('TIME', 10, oxyBarY, 50, oxyBarH, t(15, C.muted, 'left'));
-  const barX = 58;
-  const barW = W - 116;
-  renderer.drawRoundRect(C.border, barX - 2, oxyBarY - 2, barW + 4, oxyBarH + 4, 11);
-  renderer.drawRoundRect(barColor, barX, oxyBarY, Math.max(10, barW * tFrac), oxyBarH, 10);
-  renderer.drawRoundRectAlpha(barColor, 0.22, barX, oxyBarY, Math.max(10, barW * tFrac), oxyBarH, 10);
-  renderer.drawText(`${secLeft}s`, W - 52, oxyBarY, 50, oxyBarH, t(16, C.muted, 'right', '600'));
+  drawOxygenTank(renderer, state);
 }

@@ -2,13 +2,20 @@
 // Do not import platform code from core/ or render/.
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GAME_ASPECT_RATIO } from './core/Constants';
-import { bootstrapActionFtueDive, createInitialState } from './core/GameLogic';
+import {
+  applyTutorialSeenState,
+  bootstrapActionFtueDive,
+  createInitialState,
+  setLeaderboardEntries,
+} from './core/GameLogic';
 import { loadImages, BrowserAssetManifest } from './platform/AssetManifest';
 import { BrowserAudioAdapter } from './platform/BrowserAudioAdapter';
 import { BrowserGameLoop } from './platform/BrowserGameLoop';
 import { BrowserInputAdapter } from './platform/BrowserInputAdapter';
+import { BrowserFakeLeaderboardAdapter } from './platform/LeaderboardAdapter';
 import { Canvas2DRenderer } from './render/Canvas2DRenderer';
 import { isFtueDivePendingInStorage } from './platform/FtueStorage';
+import { readTutorialSeenState } from './platform/TutorialStorage';
 import { runConsistencyChecks } from './shared/ConsistencyChecks';
 
 const container = document.getElementById('game-container');
@@ -75,12 +82,21 @@ async function main(): Promise<void> {
   const renderer = new Canvas2DRenderer(ctx, images, CANVAS_WIDTH, CANVAS_HEIGHT);
   const input = new BrowserInputAdapter(canvas);
   const audio = new BrowserAudioAdapter();
+  const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();
+  applyTutorialSeenState(gameState, readTutorialSeenState());
+  const leaderboardSnapshot = leaderboard.getFishCaughtLeaderboard();
+  setLeaderboardEntries(
+    gameState,
+    leaderboardSnapshot.entries,
+    leaderboardSnapshot.bestFishCaught,
+    leaderboardSnapshot.lastSubmittedFishCaught,
+  );
   if (isFtueDivePendingInStorage()) {
     bootstrapActionFtueDive(gameState);
   }
 
-  const loop = new BrowserGameLoop(gameState, renderer, input, audio);
+  const loop = new BrowserGameLoop(gameState, renderer, input, audio, leaderboard);
   loop.start();
 }
 

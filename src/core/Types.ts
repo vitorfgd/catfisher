@@ -90,6 +90,8 @@ export interface FishState {
   ftueFleeing?: boolean;
   /** Boss only — damage remaining; normal fish use one-hit default */
   hitPoints?: number;
+  /** Shark only — brief retreat after hit/bite before it can charge again. */
+  sharkFleeTimer?: number;
 }
 
 export interface ParticleState {
@@ -122,14 +124,52 @@ export interface FloatingTextState {
   tier?: 'normal' | 'good' | 'jackpot';
 }
 
+export interface CatchCoinBurstState {
+  x: number;
+  y: number;
+  elapsed: number;
+  coinCount: number;
+  value: number;
+}
+
 export type GameEvent =
   | { type: 'fishHooked'; x: number; y: number; fishType: FishType }
   | { type: 'fishCaught'; x: number; y: number; value: number; fishType: FishType }
   | { type: 'spearFired' }
   | { type: 'diveStarted' }
-  | { type: 'runEnded'; earnings: number; runDurationSec: number }
+  | { type: 'runEnded'; earnings: number; runDurationSec: number; catchCount: number }
   | { type: 'upgradeBought'; id: string }
-  | { type: 'ftueDiveExited' };
+  | { type: 'ftueDiveExited' }
+  | { type: 'tutorialHintShown'; id: TutorialHintId };
+
+export type TutorialHintId =
+  | 'catchBasics'
+  | 'shark'
+  | 'oxygenDamage'
+  | 'gear'
+  | 'upgrades'
+  | 'combo';
+
+export type TutorialSeenState = Record<TutorialHintId, boolean>;
+
+export interface TutorialRuntimeState {
+  seen: TutorialSeenState;
+  activeId: TutorialHintId | null;
+  activeTimer: number;
+}
+
+export interface LeaderboardEntry {
+  rank: number;
+  name: string;
+  fishCaught: number;
+  isPlayer?: boolean;
+}
+
+export interface LeaderboardState {
+  bestFishCaught: number;
+  lastSubmittedFishCaught: number;
+  entries: LeaderboardEntry[];
+}
 
 /** Full-screen net VFX after using the net consumable (catches apply at `NET_VFX_CATCH_AT_SEC`). */
 export interface NetVfxState {
@@ -149,6 +189,7 @@ export interface FullGameState {
   fish: FishState[];
   particles: ParticleState[];
   floatingTexts: FloatingTextState[];
+  catchCoinBursts: CatchCoinBurstState[];
   /** Counts down; lose the run at 0. `maxOxygen` upgrade sets roundTimeMax. */
   roundTimeLeft: number;
   roundTimeMax: number;
@@ -194,6 +235,10 @@ export interface FullGameState {
    * `-1` = idle; `0`..`SHARK_BITE_VFX_TOTAL_SEC` while animating (see Constants).
    */
   sharkBiteTeethElapsed: number;
+  /** HUD oxygen tank damage VFX timer (`0` = idle). */
+  oxygenDamageTimer: number;
+  /** Last shark oxygen penalty in seconds, shown by the tank. */
+  oxygenDamageAmount: number;
 
   /** Net throw sweep VFX; null when idle. */
   netVfx: NetVfxState | null;
@@ -218,6 +263,12 @@ export interface FullGameState {
 
   // Event queue (drained each frame by platform layer)
   pendingEvents: GameEvent[];
+
+  /** Non-blocking contextual hints; persisted by platform storage. */
+  tutorial: TutorialRuntimeState;
+
+  /** Platform-owned leaderboard snapshot shown on the boat. */
+  leaderboard: LeaderboardState;
 
   /**
    * First-visit: start underwater with frozen fish; first tap unfreezes + starts the real run

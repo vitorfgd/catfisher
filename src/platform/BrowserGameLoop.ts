@@ -3,12 +3,14 @@
 
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
-import { drainEvents, getRenderState, update } from '../core/GameLogic';
+import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
 import { markFtueDiveCompleteInStorage } from './FtueStorage';
+import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
 import { renderFrame } from '../render/RenderFrame';
 import type { BrowserInputAdapter } from './BrowserInputAdapter';
 import type { AudioAdapter, InputAdapter } from './GameEvents';
+import type { LeaderboardAdapter } from './LeaderboardAdapter';
 
 export class BrowserGameLoop {
   private lastTime = 0;
@@ -19,6 +21,7 @@ export class BrowserGameLoop {
     private readonly renderer: GameRenderer,
     private readonly input: InputAdapter & Pick<BrowserInputAdapter, 'setPhase' | 'setBoatUiState'>,
     private readonly audio: AudioAdapter,
+    private readonly leaderboard: LeaderboardAdapter,
   ) {}
 
   start(): void {
@@ -48,6 +51,19 @@ export class BrowserGameLoop {
       if (event.type === 'ftueDiveExited') {
         markFtueDiveCompleteInStorage();
         continue;
+      }
+      if (event.type === 'tutorialHintShown') {
+        markTutorialHintSeen(event.id);
+        continue;
+      }
+      if (event.type === 'runEnded') {
+        const snapshot = this.leaderboard.submitFishCaught(event.catchCount);
+        setLeaderboardEntries(
+          this.state,
+          snapshot.entries,
+          snapshot.bestFishCaught,
+          snapshot.lastSubmittedFishCaught,
+        );
       }
       this.audio.handleEvent(event);
     }

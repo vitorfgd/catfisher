@@ -1,6 +1,7 @@
 import type { GameRenderer } from './GameRenderer';
 import type { RenderState } from './RenderState';
 import type { UpgradeState } from '../core/Types';
+import { GamePhase } from '../core/Types';
 import {
   BAIT_COST,
   BAIT_MAX_STOCK,
@@ -249,8 +250,33 @@ function drawSectionHeader(
   renderer.drawText(label, x + 12, y + 4, w - 12, H - 14, t(30, accent, 'left', '800'));
 }
 
+function drawBoatTutorialHint(renderer: GameRenderer, state: RenderState): void {
+  const hint = state.tutorialHint;
+  if (hint == null) return;
+  const w = 360;
+  const h = 80;
+  const x = (CANVAS_WIDTH - w) / 2;
+  const y = 126;
+  renderer.drawRoundRectAlpha(C.bg, 0.91, x, y, w, h, 18);
+  renderer.drawRoundRectAlpha(C.teal, 0.13, x + 3, y + 3, w - 6, h - 6, 15);
+  renderer.drawText(hint.title.toUpperCase(), x + 16, y + 10, w - 32, 22, t(16, C.teal, 'left', '800'));
+  renderer.drawText(hint.body, x + 16, y + 36, w - 32, 34, t(13, C.white, 'left', '700'));
+}
+
+export function drawBoatBackgroundLayer(renderer: GameRenderer, alpha = 1): void {
+  const zoom = 1.12;
+  const drawW = CANVAS_WIDTH * zoom;
+  const drawH = CANVAS_HEIGHT * zoom;
+  const drawY = -10;
+  if (alpha >= 0.999) {
+    renderer.drawImage({ id: AssetIds.boatBg }, (CANVAS_WIDTH - drawW) / 2, drawY, drawW, drawH);
+  } else if (alpha > 0.002) {
+    renderer.drawImageAlpha({ id: AssetIds.boatBg }, (CANVAS_WIDTH - drawW) / 2, drawY, drawW, drawH, alpha);
+  }
+}
+
 export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
-  renderer.drawImage({ id: AssetIds.boatBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  drawBoatBackgroundLayer(renderer);
 }
 
 /** Main-menu chrome (stats, upgrades, gear, go fish). */
@@ -310,6 +336,33 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
   }
 
+  const diveCardPadY = sectionPadY + 4;
+  const maxDiveShadowOffset = 10;
+  const diveCardTop = DIVE_BUTTON_Y - diveCardPadY;
+  const diveCardBottom = DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT + maxDiveShadowOffset + diveCardPadY;
+  const diveCardH = diveCardBottom - diveCardTop;
+  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, diveCardTop, deck.w, diveCardH, 18);
+
+  const diveInnerPad = BOAT_MENU_DIVE_BUTTON_INNER_PAD_X;
+  const diveX = secX + diveInnerPad;
+  const diveW = secW - diveInnerPad * 2;
+  const loopPressed = state.phase === GamePhase.Boat && Math.floor(Date.now() / 520) % 2 === 0;
+  const loopPressY = loopPressed ? 5 : 0;
+  const pressP = state.phase === GamePhase.Diving ? Math.max(0.65, 1 - state.transitionUiAlpha) : 0;
+  const pressY = Math.max(loopPressY, Math.min(7, Math.max(0, pressP * 7)));
+  const shadowOffset = Math.max(2, 10 - pressY);
+  renderer.drawRoundRectAlpha('rgba(64,220,170,0.36)', 1, diveX, DIVE_BUTTON_Y + shadowOffset, diveW, DIVE_BUTTON_HEIGHT, 14);
+  renderer.drawRoundRectAlpha('rgba(2,6,10,0.40)', 1, diveX, DIVE_BUTTON_Y + shadowOffset + 2, diveW, DIVE_BUTTON_HEIGHT, 14);
+  renderer.drawRoundRectAlpha(Boat.diveHi, loopPressed ? 0.18 : 0.08, diveX - 4, DIVE_BUTTON_Y + pressY - 4, diveW + 8, DIVE_BUTTON_HEIGHT + 8, 16);
+  renderer.drawRoundRect(Boat.dive, diveX, DIVE_BUTTON_Y + pressY, diveW, DIVE_BUTTON_HEIGHT, 14);
+  const diveHiH = 18;
+  const diveHiY = DIVE_BUTTON_Y + pressY + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
+  renderer.drawText('GO FISH', diveX, DIVE_BUTTON_Y + pressY + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
+    ...t(32, Boat.card, 'center', '800'),
+    useLayoutMaxWidth: false,
+  });
+
   const upgradesCardTop = UPG_LABEL_Y - sectionPadY;
   const upgradesCardBottom = UPGRADE_LAST_ROW_BOTTOM + sectionPadY;
   const upgradesCardH = upgradesCardBottom - upgradesCardTop;
@@ -367,25 +420,10 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     CONSUMABLE_H,
   );
 
-  const diveCardTop = DIVE_BUTTON_Y - sectionPadY;
-  const diveCardBottom = DIVE_BUTTON_Y + DIVE_BUTTON_HEIGHT + sectionPadY;
-  const diveCardH = diveCardBottom - diveCardTop;
-  renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, diveCardTop, deck.w, diveCardH, 18);
-
-  const diveInnerPad = BOAT_MENU_DIVE_BUTTON_INNER_PAD_X;
-  const diveX = secX + diveInnerPad;
-  const diveW = secW - diveInnerPad * 2;
-  renderer.drawRoundRect(Boat.dive, diveX, DIVE_BUTTON_Y, diveW, DIVE_BUTTON_HEIGHT, 14);
-  const diveHiH = 18;
-  const diveHiY = DIVE_BUTTON_Y + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
-  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
-  renderer.drawText('GO FISH', diveX, DIVE_BUTTON_Y + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
-    ...t(32, Boat.card, 'center', '800'),
-    useLayoutMaxWidth: false,
-  });
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
   drawBoatBackgroundOnly(renderer);
   drawBoatMenuUi(renderer, state);
+  drawBoatTutorialHint(renderer, state);
 }

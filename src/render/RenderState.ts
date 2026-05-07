@@ -1,11 +1,14 @@
 // Plain data snapshot consumed by renderFrame. No platform objects allowed.
 
 import type {
+  CatchCoinBurstState,
   ConsumableState,
   FishType,
   FloatingTextState,
   GamePhase,
+  LeaderboardState,
   ParticleState,
+  TutorialHintId,
   UpgradeState,
 } from '../core/Types';
 import type { OceanTransitionDraw } from './oceanTransition';
@@ -35,6 +38,9 @@ export interface RenderFishState {
   rotation: number;      // radians — tilt sprite to match swim direction
   isAggressive: boolean; // shark in attack mode → red warning glow
   attackProgress: number; // Large shark charge visual, 0-1
+  isFleeing: boolean;
+  hitPoints?: number;
+  maxHitPoints?: number;
 }
 
 export interface RenderState {
@@ -51,6 +57,7 @@ export interface RenderState {
   fish: RenderFishState[];
   particles: ParticleState[];
   floatingTexts: FloatingTextState[];
+  catchCoinBursts: CatchCoinBurstState[];
 
   // HUD
   money: number;
@@ -69,6 +76,13 @@ export interface RenderState {
   comboCount: number;
   comboActive: boolean;
   oxyBoostActive: boolean;
+  oxygenDamageTimer: number;
+  oxygenDamageAmount: number;
+  tutorialHint: {
+    id: TutorialHintId;
+    title: string;
+    body: string;
+  } | null;
 
   // Boat phase UI
   upgradePanelOpen: keyof UpgradeState | null;
@@ -80,6 +94,7 @@ export interface RenderState {
   lastRunEarnings: number;
   lastRunDurationSec: number;
   lastRunCatchCount: number;
+  leaderboard: LeaderboardState;
 
   // Consumable active state (action phase)
   baitActive: boolean;
@@ -96,6 +111,8 @@ export interface RenderState {
    * Null during breach boat-reveal tail (see `breachBoatRevealAlpha`).
    */
   transitionBackdrop: { boat: number; underwater: number } | null;
+  /** Boat UI opacity while dive transition starts. */
+  transitionUiAlpha: number;
   /** True once breach ocean move has finished (`breachTimer` ≥ fade + move). */
   breachShowBoatRevealOnly: boolean;
   /** Breach end: 0 = start of boat reveal; 1 = full `drawBoatScreen` before phase flip. */

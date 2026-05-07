@@ -19,11 +19,11 @@ import {
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
-import { drawBoatMenuUi, drawBoatScreen } from './boatScreen';
+import { drawBoatBackgroundLayer, drawBoatMenuUi, drawBoatScreen } from './boatScreen';
 import { drawOceanTransition, type OceanTransitionDraw } from './oceanTransition';
 import { drawHud, getHudMoneyLayout } from './hud';
 import { C, t, td, tb } from './theme';
-import { actionViewFocus, getActionViewZoomForSession } from '../core/ActionViewTransform';
+import { actionViewFocus, actionWorldToCanvas, getActionViewZoomForSession } from '../core/ActionViewTransform';
 import { getHarpoonMuzzleWorldFromGrip } from '../core/SpearSystem';
 
 /** 2D art aspect (width/height) for the center-screen reveal */
@@ -103,9 +103,7 @@ function drawDualSceneBackdrop(
         backdrop.underwater,
       );
     }
-    if (backdrop.boat > 0.002) {
-      renderer.drawImageAlpha({ id: AssetIds.boatBg }, 0, 0, W, H, backdrop.boat);
-    }
+    drawBoatBackgroundLayer(renderer, backdrop.boat);
     return;
   }
 
@@ -126,7 +124,7 @@ function drawDualSceneBackdrop(
   const aboveH = splitY;
   if (backdrop.boat > 0.002 && aboveH > 0.5) {
     renderer.pushClipRect(0, 0, W, aboveH);
-    renderer.drawImageAlpha({ id: AssetIds.boatBg }, 0, 0, W, H, backdrop.boat);
+    drawBoatBackgroundLayer(renderer, backdrop.boat);
     renderer.popClip();
   }
 }
@@ -144,8 +142,8 @@ function drawFishSprite(
   attackProgress = 0,
 ): void {
   const attackRefId = isAggressive ? FISH_ATTACK_IMAGE_IDS[type] : undefined;
-  const attackGrow = attackRefId != null ? attackProgress * attackProgress : 0;
-  const attackScale = attackRefId != null ? 1 + attackGrow * 1.25 : 1;
+  const attackGrow = attackRefId != null ? attackProgress * attackProgress * attackProgress : 0;
+  const attackScale = attackRefId != null ? 0.86 + attackGrow * 1.36 : 1;
   const w = FISH_DRAW_WIDTH[type] * scale * attackScale;
   const h = w / (attackRefId != null ? 1 : FISH_ASPECT_RATIO[type]);
   const ref = { id: attackRefId ?? FISH_IMAGE_IDS[type] };
@@ -154,7 +152,7 @@ function drawFishSprite(
   if (type === FishType.Puffer) {
     const oxPulse = 0.60 + 0.40 * Math.sin(now / 220);
     renderer.drawText(
-      '+TIME',
+      '+O2',
       x - 44,
       y - h / 2 - 20,
       88,
@@ -236,6 +234,25 @@ function drawFish(renderer: GameRenderer, fish: RenderFishState): void {
     fish.drawScale ?? 1,
     fish.attackProgress,
   );
+  if (fish.type === FishType.Large && fish.maxHitPoints != null && fish.hitPoints != null) {
+    const hpW = 86;
+    const hpH = 8;
+    const hpX = fish.x - hpW / 2;
+    const hpY = fish.y + 46;
+    const frac = Math.max(0, Math.min(1, fish.hitPoints / fish.maxHitPoints));
+    renderer.drawRoundRectAlpha(C.bg, 0.82, hpX - 3, hpY - 3, hpW + 6, hpH + 6, 7);
+    renderer.drawRoundRect(C.danger, hpX, hpY, Math.max(8, hpW * frac), hpH, 4);
+    if (fish.isFleeing) {
+      renderer.drawText(
+        'RETREATING',
+        fish.x - 72,
+        fish.y - 76,
+        144,
+        22,
+        { ...tb(15, C.warn, 'center'), strokeColor: 'rgba(3,10,16,0.88)', strokeWidth: 3 },
+      );
+    }
+  }
 }
 
 function drawTether(renderer: GameRenderer, fx: number, fy: number, tx2: number, ty2: number): void {
@@ -366,6 +383,19 @@ function drawFtueCtaOnly(renderer: GameRenderer): void {
   renderer.drawText('One tap, full run. Get paid on every catch.', 0, subY, W, subH, t(15, C.teal, 'center', '800'));
 }
 
+function drawTutorialHintPanel(renderer: GameRenderer, state: RenderState): void {
+  const hint = state.tutorialHint;
+  if (hint == null || state.ftueActive) return;
+  const w = 360;
+  const h = 86;
+  const x = (CANVAS_WIDTH - w) / 2;
+  const y = state.phase === GamePhase.Boat ? 126 : 74;
+  renderer.drawRoundRectAlpha(C.bg, 0.90, x, y, w, h, 18);
+  renderer.drawRoundRectAlpha(C.teal, 0.12, x + 3, y + 3, w - 6, h - 6, 15);
+  renderer.drawText(hint.title.toUpperCase(), x + 16, y + 12, w - 32, 24, t(17, C.teal, 'left', '800'));
+  renderer.drawText(hint.body, x + 16, y + 40, w - 32, 34, t(14, C.white, 'left', '700'));
+}
+
 /**
  * Chest opens at spear hit (screen-projected); light vignette, copy tucked near the prop.
  */
@@ -397,17 +427,22 @@ function drawTreasureCinematicOverlay(renderer: GameRenderer, state: RenderState
 
     const labelY = drawT - 28;
     renderer.drawText('TREASURE', chestCx - 120, labelY, 240, 26, td(22, '#ffe8a0', 'center'));
+    const prizeY = drawT + baseH * 0.88;
     if (c.comboText != null) {
+      const comboMult = c.comboText.replace(' COMBO', '');
+      const pop = 1 + Math.max(0, 1 - Math.min(1, c.elapsedSinceAward / 0.25)) * 0.18;
       renderer.drawText(
-        c.comboText,
-        chestCx - 100,
-        drawT + baseH * 0.72,
-        200,
+        `${comboMult} APPLIED`,
+        chestCx - 104,
+        drawT + baseH * 0.70,
+        208,
         24,
-        t(16, C.haul, 'center', '800'),
+        { ...t(17, C.haul, 'center', '800'), strokeColor: 'rgba(3,10,16,0.86)', strokeWidth: 3 },
       );
+      renderer.drawText(`${comboMult} -> ${c.prizeText}`, chestCx - 124, prizeY, 248, 38 * pop, td(27 * pop, C.gold, 'center'));
+    } else {
+      renderer.drawText(c.prizeText, chestCx - 100, prizeY, 200, 36, td(26, C.gold, 'center'));
     }
-    renderer.drawText(c.prizeText, chestCx - 100, drawT + baseH * 0.88, 200, 36, td(26, C.gold, 'center'));
   }
 
   if (w > 0) {
@@ -424,23 +459,76 @@ function drawTreasureFlyingCoins(renderer: GameRenderer, state: RenderState): vo
   const ty = layout.iconCy;
   const fromX = c.chestScreenX;
   const fromY = c.chestScreenY - 8;
-  const flight = TREASURE_MONEY_LERP_SEC + 0.12;
-  const spread = 0.2 / Math.max(1, c.coinCount - 1);
+  const flight = TREASURE_MONEY_LERP_SEC + 0.34;
+  const spread = 0.46 / Math.max(1, c.coinCount - 1);
 
   for (let i = 0; i < c.coinCount; i += 1) {
     const stagger = i * spread;
     let u = (c.elapsedSinceAward - stagger) / flight;
     if (u <= 0) continue;
     if (u > 1) u = 1;
-    const ease = 1 - (1 - u) * (1 - u);
-    const arc = Math.sin(Math.PI * ease) * 72;
-    const x = fromX + (tx - fromX) * ease;
-    const y = fromY + (ty - fromY) * ease - arc;
+    const ease = 1 - (1 - u) * (1 - u) * (1 - u);
+    const wave = Math.sin(i * 12.9898) * 0.5 + 0.5;
+    const fan = ((i % 9) - 4) * (10 + wave * 7);
+    const startX = fromX + fan;
+    const startY = fromY + ((i % 5) - 2) * 7;
+    const arc = Math.sin(Math.PI * ease) * (88 + wave * 72);
+    const wobble = Math.sin(ease * Math.PI * 2 + i * 0.8) * (1 - ease) * 20;
+    const x = startX + (tx - startX) * ease + wobble;
+    const y = startY + (ty - startY) * ease - arc;
     let a = 1;
     if (u < 0.1) a = u / 0.1;
-    else if (u > 0.88) a = (1 - u) / 0.12;
-    const sz = 20 * (0.82 + 0.18 * ease);
+    else if (u > 0.9) a = (1 - u) / 0.1;
+    const sz = (20 + wave * 12) * (0.78 + 0.22 * ease);
+    renderer.drawEllipseAlpha(C.gold, Math.min(0.35, a * 0.26), x, y, sz * 0.92, sz * 0.72);
     renderer.drawImageAlpha({ id: AssetIds.iconCoin }, x - sz / 2, y - sz / 2, sz, sz, Math.min(1, Math.max(0, a)));
+  }
+}
+
+function drawCatchCoinBursts(renderer: GameRenderer, state: RenderState): void {
+  if (state.catchCoinBursts.length === 0) return;
+  const layout = getHudMoneyLayout(`${state.hudMoneyDisplay}`);
+  const tx = layout.iconCx;
+  const ty = layout.iconCy;
+  const zoom = getActionViewZoomForSession(state.actionSessionTime, state.ftueActive);
+
+  for (const burst of state.catchCoinBursts) {
+    const raw = actionWorldToCanvas(
+      burst.x,
+      burst.y,
+      state.shakeX,
+      state.shakeY,
+      state.player.x,
+      state.player.y,
+      zoom,
+    );
+    const fromX = raw.x;
+    const fromY = raw.y;
+    const flight = 0.72;
+    const spread = 0.2 / Math.max(1, burst.coinCount - 1);
+
+    for (let i = 0; i < burst.coinCount; i += 1) {
+      const stagger = i * spread;
+      let u = (burst.elapsed - stagger) / flight;
+      if (u <= 0) continue;
+      if (u > 1) u = 1;
+      const ease = 1 - (1 - u) * (1 - u) * (1 - u);
+      const wave = Math.sin((i + burst.value) * 9.173) * 0.5 + 0.5;
+      const fan = ((i % 5) - 2) * (7 + wave * 5);
+      const sx = fromX + fan;
+      const sy = fromY + ((i % 3) - 1) * 5;
+      const arc = Math.sin(Math.PI * ease) * (42 + wave * 36);
+      const wobble = Math.sin(ease * Math.PI * 2 + i * 0.9) * (1 - ease) * 9;
+      const x = sx + (tx - sx) * ease + wobble;
+      const y = sy + (ty - sy) * ease - arc;
+      let a = 1;
+      if (u < 0.08) a = u / 0.08;
+      else if (u > 0.88) a = (1 - u) / 0.12;
+      const sz = (11 + wave * 8) * (0.78 + 0.22 * ease);
+      const alpha = Math.max(0, Math.min(1, a));
+      renderer.drawEllipseAlpha(C.gold, alpha * 0.18, x, y, sz * 0.9, sz * 0.7);
+      renderer.drawImageAlpha({ id: AssetIds.iconCoin }, x - sz / 2, y - sz / 2, sz, sz, alpha);
+    }
   }
 }
 
@@ -513,7 +601,7 @@ function drawFirstPersonHarpoonGun(
   const drawW = HARPOON_GUN_DRAW_W;
   const drawH = HARPOON_GUN_DRAW_H;
   const aim = state.player.aimAngle;
-  const rotDeg = (Math.atan2(-Math.cos(aim), -Math.sin(aim)) * 180) / Math.PI;
+  const rotDeg = ((aim + Math.PI / 2) * 180) / Math.PI;
   const gripX = state.player.x;
   const gripY = state.player.y + slide;
 
@@ -522,6 +610,16 @@ function drawFirstPersonHarpoonGun(
   renderer.drawImage({ id: AssetIds.gun1 }, -drawW * 0.5, -drawH, drawW, drawH);
   renderer.pop();
   renderer.pop();
+}
+
+function drawDiverCharacter(renderer: GameRenderer): void {
+  const naturalW = 1000;
+  const naturalH = 320;
+  const drawW = 500;
+  const drawH = (drawW * naturalH) / naturalW;
+  const x = CANVAS_WIDTH * 0.5 - drawW * 0.5 - 34;
+  const y = CANVAS_HEIGHT - drawH + 22;
+  renderer.drawImage({ id: AssetIds.helmet }, x, y, drawW, drawH);
 }
 
 function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState): void {
@@ -605,6 +703,9 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
     drawFirstPersonHarpoonGun(renderer, state, gunSlide);
   }
   for (const spear of state.spears) drawSpearBody(renderer, spear);
+  if (actionZoomed) {
+    drawDiverCharacter(renderer);
+  }
   drawParticles(renderer, state.particles);
   drawFloatingTexts(renderer, state.floatingTexts);
   if (actionZoomed) {
@@ -746,6 +847,7 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
   if (state.phase === GamePhase.Action && state.ftueActive) {
     drawFtueCtaOnly(renderer);
   }
+  drawTutorialHintPanel(renderer, state);
   if (actionOrBreach && state.sharkBiteFlash > 0 && !dualOverHud) {
     drawSharkBiteFlashOverlay(renderer, state);
   }
@@ -759,6 +861,7 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
     drawTreasureCinematicOverlay(renderer, state);
     drawTreasureFlyingCoins(renderer, state);
   }
+  drawCatchCoinBursts(renderer, state);
 }
 
 export function renderFrame(renderer: GameRenderer, state: RenderState): void {
@@ -770,9 +873,14 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
 
   if (state.phase === GamePhase.Diving) {
-    drawBoatMenuUi(renderer, state);
+    drawBoatBackgroundLayer(renderer);
     if (state.transitionBackdrop != null) {
       drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+    }
+    if (state.transitionUiAlpha > 0.002) {
+      renderer.pushOpacity(state.transitionUiAlpha);
+      drawBoatMenuUi(renderer, state);
+      renderer.popOpacity();
     }
     if (state.oceanTransition != null) {
       drawOceanTransition(renderer, state.oceanTransition);

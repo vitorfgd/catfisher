@@ -6,6 +6,9 @@ import {
   GamePhase,
   type ConsumableState,
   type FullGameState,
+  type LeaderboardEntry,
+  type TutorialHintId,
+  type TutorialSeenState,
   type UpgradeState,
 } from './Types';
 export type { GameEvent } from './Types';
@@ -76,7 +79,12 @@ import {
   SHARK_ATTACK_RANGE,
   SHARK_BITE_FLASH_DECAY,
   SHARK_BITE_VFX_TOTAL_SEC,
+  SHARK_BITE_FLEE_SEC,
+  SHARK_FLEE_SPEED,
+  SHARK_HIT_FLEE_SEC,
+  SHARK_HIT_POINTS,
   SHARK_MAX_ALIVE,
+  OXYGEN_DAMAGE_VFX_SEC,
   TREASURE_SPAWN_INTERVAL,
   UPGRADE_MAX_LEVEL,
   BOSS_SPAWN_INTERVAL,
@@ -132,6 +140,112 @@ import {
 } from './ParticleSystem';
 
 const FTUE_SHOWCASE_FISH_SCALE = 1.58;
+const TUTORIAL_HINT_DURATION_SEC = 4.2;
+const CATCH_COIN_BURST_LIFE_SEC = 0.78;
+const TUTORIAL_HINT_COPY: Record<TutorialHintId, { title: string; body: string }> = {
+  catchBasics: {
+    title: 'Catch fish, then reel them in',
+    body: 'Tap a target. You get paid when the spear hauls the catch back.',
+  },
+  shark: {
+    title: 'Shark attack',
+    body: 'Hit it multiple times. After each hit, it retreats before charging again.',
+  },
+  oxygenDamage: {
+    title: 'Protect your oxygen',
+    body: 'A shark bite damages your tank and costs air. Keep it away from the bottom.',
+  },
+  gear: {
+    title: 'Use gear during a dive',
+    body: 'Bait pulls fish in. The net sweeps the screen for quick catches.',
+  },
+  upgrades: {
+    title: 'Spend cash between dives',
+    body: 'Upgrade your spear, haul value, and oxygen to push deeper.',
+  },
+  combo: {
+    title: 'Combos pay more',
+    body: 'Chain catches quickly to boost the payout on the next fish.',
+  },
+};
+
+function createTutorialSeenState(): TutorialSeenState {
+  return {
+    catchBasics: false,
+    shark: false,
+    oxygenDamage: false,
+    gear: false,
+    upgrades: false,
+    combo: false,
+  };
+}
+
+function createFakeLeaderboardEntries(bestFishCaught = 0): LeaderboardEntry[] {
+  const base = [
+    { rank: 1, name: 'Mara', fishCaught: 42 },
+    { rank: 2, name: 'Skiff', fishCaught: 35 },
+    { rank: 3, name: 'Vitor', fishCaught: Math.max(bestFishCaught, 28), isPlayer: true },
+    { rank: 4, name: 'Pip', fishCaught: 22 },
+    { rank: 5, name: 'Nori', fishCaught: 18 },
+  ];
+  return base
+    .sort((a, b) => b.fishCaught - a.fishCaught)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+}
+
+function triggerTutorialHint(state: FullGameState, id: TutorialHintId): void {
+  if (state.tutorial.seen[id]) return;
+  state.tutorial.seen[id] = true;
+  state.tutorial.activeId = id;
+  state.tutorial.activeTimer = TUTORIAL_HINT_DURATION_SEC;
+  state.pendingEvents.push({ type: 'tutorialHintShown', id });
+}
+
+function updateTutorialHintTimer(state: FullGameState, dt: number): void {
+  if (state.tutorial.activeTimer <= 0) return;
+  state.tutorial.activeTimer = Math.max(0, state.tutorial.activeTimer - dt);
+  if (state.tutorial.activeTimer === 0) {
+    state.tutorial.activeId = null;
+  }
+}
+
+function setSharkFleeVelocity(fish: { x: number; y: number; vx: number; vy: number }, speed: number): void {
+  const dx = fish.x - PLAYER_X;
+  const dy = fish.y - PLAYER_Y;
+  const dist = Math.max(1, Math.hypot(dx, dy));
+  fish.vx = (dx / dist) * speed;
+  fish.vy = (dy / dist) * speed;
+}
+
+function spawnCatchCoinBurst(state: FullGameState, x: number, y: number, value: number): void {
+  state.catchCoinBursts.push({
+    x,
+    y,
+    value,
+    elapsed: 0,
+    coinCount: Math.min(12, Math.max(4, 3 + Math.floor(Math.log2(value + 4)))),
+  });
+}
+
+function updateCatchCoinBursts(state: FullGameState, dt: number): void {
+  for (const burst of state.catchCoinBursts) {
+    burst.elapsed += dt;
+  }
+  state.catchCoinBursts = state.catchCoinBursts.filter((burst) => burst.elapsed < CATCH_COIN_BURST_LIFE_SEC);
+}
+
+export function applyTutorialSeenState(state: FullGameState, seen: Partial<TutorialSeenState>): void {
+  state.tutorial.seen = { ...state.tutorial.seen, ...seen };
+}
+
+export function setLeaderboardEntries(
+  state: FullGameState,
+  entries: LeaderboardEntry[],
+  bestFishCaught = state.leaderboard.bestFishCaught,
+  lastSubmittedFishCaught = state.leaderboard.lastSubmittedFishCaught,
+): void {
+  state.leaderboard = { entries, bestFishCaught, lastSubmittedFishCaught };
+}
 
 function decayHudConsumableFlash(state: FullGameState, dt: number): void {
   state.hudConsumableFlash.net = Math.max(0, state.hudConsumableFlash.net - dt);
@@ -260,6 +374,7 @@ export function createInitialState(): FullGameState {
     fish: [],
     particles: [],
     floatingTexts: [],
+    catchCoinBursts: [],
     roundTimeLeft: 0,
     roundTimeMax: getMaxOxygen(upgrades),
     sessionEarnings: 0,
@@ -289,6 +404,8 @@ export function createInitialState(): FullGameState {
     catchFlash: 0,
     sharkBiteFlash: 0,
     sharkBiteTeethElapsed: -1,
+    oxygenDamageTimer: 0,
+    oxygenDamageAmount: 0,
     diveTimer: 0,
     breachTimer: 0,
     oceanBubbles: [],
@@ -297,6 +414,16 @@ export function createInitialState(): FullGameState {
     hudConsumableFlash: { net: 0, bait: 0 },
     netVfx: null,
     harpoonGunAnimElapsed: -1,
+    tutorial: {
+      seen: createTutorialSeenState(),
+      activeId: null,
+      activeTimer: 0,
+    },
+    leaderboard: {
+      bestFishCaught: 0,
+      lastSubmittedFishCaught: 0,
+      entries: createFakeLeaderboardEntries(),
+    },
   };
 }
 
@@ -312,6 +439,7 @@ function resetForNewDive(state: FullGameState): void {
   state.fish = [];
   state.particles = [];
   state.floatingTexts = [];
+  state.catchCoinBursts = [];
   state.fishSpawnTimer = 0.1;
   state.player.x = PLAYER_X;
   state.player.y = PLAYER_Y;
@@ -328,6 +456,8 @@ function resetForNewDive(state: FullGameState): void {
   state.catchFlash = 0;
   state.sharkBiteFlash = 0;
   state.sharkBiteTeethElapsed = -1;
+  state.oxygenDamageTimer = 0;
+  state.oxygenDamageAmount = 0;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
   state.netVfx = null;
@@ -357,12 +487,15 @@ function finalizeRunToBoat(state: FullGameState): void {
   state.fish = [];
   state.particles = [];
   state.floatingTexts = [];
+  state.catchCoinBursts = [];
   state.shakeIntensity = 0;
   state.shakeX = 0;
   state.shakeY = 0;
   state.catchFlash = 0;
   state.sharkBiteFlash = 0;
   state.sharkBiteTeethElapsed = -1;
+  state.oxygenDamageTimer = 0;
+  state.oxygenDamageAmount = 0;
   state.treasureReveal = null;
   state.hudConsumableFlash = { net: 0, bait: 0 };
   state.harpoonGunAnimElapsed = -1;
@@ -370,7 +503,9 @@ function finalizeRunToBoat(state: FullGameState): void {
     type: 'runEnded',
     earnings: state.sessionEarnings,
     runDurationSec: state.lastRunDurationSec,
+    catchCount: state.lastRunCatchCount,
   });
+  if (state.lastRunCatchCount > 0) triggerTutorialHint(state, 'upgrades');
 }
 
 function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
@@ -401,6 +536,7 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
       state.money -= cost;
       state.upgrades[id] += 1;
       state.pendingEvents.push({ type: 'upgradeBought', id });
+      triggerTutorialHint(state, 'upgrades');
       continue;
     }
 
@@ -414,6 +550,7 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
         state.money -= BAIT_COST;
         state.consumables.bait += 1;
       }
+      triggerTutorialHint(state, 'gear');
       continue;
     }
   }
@@ -435,6 +572,8 @@ function updateTreasureReveal(state: FullGameState, dt: number, r: Rng): void {
     tr.moneyLerpTo = state.money;
     state.sessionEarnings += totalReward;
     state.sessionCatchCount += 1;
+    triggerTutorialHint(state, 'catchBasics');
+    if (tr.comboBonus > 0) triggerTutorialHint(state, 'combo');
     emitCatchPayoffFX(state.particles, tr.x, tr.y, FishType.Treasure, totalReward, r);
     state.catchFlash = Math.max(
       state.catchFlash,
@@ -540,6 +679,7 @@ function applyNetCatchSweep(state: FullGameState, rng: Rng): void {
       state.sessionEarnings += value;
       state.sessionCatchCount += 1;
       emitCatchPayoffFX(state.particles, fish.x, fish.y, fish.type, value, rng);
+      spawnCatchCoinBurst(state, fish.x, fish.y - 8, value);
       emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: true, tier: moneyTextTier(value) });
       state.catchFlash = Math.max(
         state.catchFlash,
@@ -558,6 +698,7 @@ function applyNetCatchSweep(state: FullGameState, rng: Rng): void {
     state.sessionEarnings += value;
     state.sessionCatchCount += 1;
     emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng, 0.85);
+    spawnCatchCoinBurst(state, fish.x, fish.y - 8, value);
     emitFloatingText(state.floatingTexts, fish.x, fish.y - 20, value, { pop: value >= 35, tier: moneyTextTier(value) });
   }
   state.shakeIntensity += 4.0;
@@ -589,6 +730,9 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   }
   if (state.sharkBiteFlash > 0) {
     state.sharkBiteFlash = Math.max(0, state.sharkBiteFlash - SHARK_BITE_FLASH_DECAY * dt);
+  }
+  if (state.oxygenDamageTimer > 0) {
+    state.oxygenDamageTimer = Math.max(0, state.oxygenDamageTimer - dt);
   }
 
   if (state.ftueActive) {
@@ -623,6 +767,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   for (const command of commands) {
     // Consumable use
     if (command.type === 'useConsumable') {
+      triggerTutorialHint(state, 'gear');
       if (command.id === 'net' && state.consumables.net > 0 && state.netVfx == null) {
         state.consumables.net -= 1;
         state.netVfx = { elapsed: 0, catchesApplied: false };
@@ -825,27 +970,46 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   // ── Shark attack ─────────────────────────────────────────────────────────
   let sharkBiteThisFrame = false;
   for (const fish of state.fish) {
-    if (fish.type !== FishType.Large || !fish.alive || fish.hasAttacked) continue;
+    if (fish.type !== FishType.Large || !fish.alive) continue;
+    if ((fish.hitPoints ?? SHARK_HIT_POINTS) > 0 && fish.hitPoints == null) {
+      fish.hitPoints = SHARK_HIT_POINTS;
+    }
+    if ((fish.sharkFleeTimer ?? 0) > 0) {
+      fish.sharkFleeTimer = Math.max(0, (fish.sharkFleeTimer ?? 0) - dt);
+      setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
+      continue;
+    }
+    if (fish.hasAttacked) continue;
     if (fish.age < SHARK_AGGRO_DELAY) continue;
+    triggerTutorialHint(state, 'shark');
     const dx = fish.x - PLAYER_X;
     const dy = fish.y - PLAYER_Y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 1) {
-      fish.vx = (-dx / dist) * SHARK_ATTACK_CHARGE_SPEED;
-      fish.vy = (-dy / dist) * SHARK_ATTACK_CHARGE_SPEED;
+      const chargeP = Math.min(1, Math.max(0, (fish.age - SHARK_AGGRO_DELAY) / SHARK_ATTACK_GROW_SEC));
+      const accel = 0.32 + 0.68 * chargeP * chargeP * chargeP;
+      const chargeSpeed = SHARK_ATTACK_CHARGE_SPEED * accel;
+      fish.vx = (-dx / dist) * chargeSpeed;
+      fish.vy = (-dy / dist) * chargeSpeed;
     }
     if (!sharkBiteThisFrame && dist < SHARK_ATTACK_RANGE) {
       sharkBiteThisFrame = true;
       fish.hasAttacked = true;
       fish.hitFlash = 1.0;
+      fish.sharkFleeTimer = SHARK_BITE_FLEE_SEC;
+      fish.age = 0;
+      setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
       state.sharkBiteFlash = 1;
       state.sharkBiteTeethElapsed = 0;
       state.roundTimeLeft = Math.max(0, state.roundTimeLeft - SHARK_ATTACK_DAMAGE);
+      state.oxygenDamageTimer = OXYGEN_DAMAGE_VFX_SEC;
+      state.oxygenDamageAmount = SHARK_ATTACK_DAMAGE;
       state.shakeIntensity += 5.5;
       emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng);
+      triggerTutorialHint(state, 'oxygenDamage');
       state.floatingTexts.push({
         x: fish.x, y: fish.y - 28,
-        vy: -52, text: `-${SHARK_ATTACK_DAMAGE}s`, life: 1.1, maxLife: 1.1,
+        vy: -52, text: `-${SHARK_ATTACK_DAMAGE}s O2`, life: 1.1, maxLife: 1.1,
       });
     }
   }
@@ -862,6 +1026,51 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     const spear = state.spears.find((current) => current.id === spearId);
     const fish = state.fish.find((current) => current.id === fishId);
     if (!spear || !fish || !fish.alive) continue;
+
+    if (fish.type === FishType.Large) {
+      resolvedSpearIds.add(spearId);
+      triggerTutorialHint(state, 'shark');
+      const prev = fish.hitPoints ?? SHARK_HIT_POINTS;
+      const next = Math.max(0, prev - 1);
+      fish.hitPoints = next;
+      fish.hitFlash = 1.0;
+
+      if (next > 0) {
+        fish.sharkFleeTimer = SHARK_HIT_FLEE_SEC;
+        fish.age = 0;
+        setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
+        emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng, 0.65);
+        returnSpearWithoutCatch(spear);
+        state.floatingTexts.push({
+          x: fish.x,
+          y: fish.y - 34,
+          vy: -52,
+          text: `SHARK ${SHARK_HIT_POINTS - next}/${SHARK_HIT_POINTS}`,
+          life: 0.85,
+          maxLife: 0.85,
+          textScale: 1.08,
+        });
+        state.shakeIntensity += 2.6;
+        continue;
+      }
+
+      resolvedFishIds.add(fishId);
+      fish.alive = false;
+      const catchValue = Math.floor(
+        getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
+        * getHaulMultiplier(state.upgrades),
+      );
+      attachCatchToSpear(spear, fish.type, catchValue);
+      emitHookImpactFX(state.particles, fish.x, fish.y, fish.type, rng);
+      state.shakeIntensity += SHAKE_ON_HOOK * 1.35;
+      state.pendingEvents.push({
+        type: 'fishHooked',
+        x: fish.x,
+        y: fish.y,
+        fishType: fish.type,
+      });
+      continue;
+    }
 
     if (fish.type === FishType.Boss) {
       const dmg = getBossSpearDamage(state.upgrades.speargun);
@@ -964,6 +1173,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     state.money += totalReward;
     state.sessionEarnings += totalReward;
     state.sessionCatchCount += 1;
+    triggerTutorialHint(state, 'catchBasics');
 
     // Pufferfish: add time + celebration flash
     if (catchResult.fishType === FishType.Puffer) {
@@ -972,6 +1182,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     }
 
     emitCatchPayoffFX(state.particles, catchResult.x, catchResult.y, catchResult.fishType, totalReward, rng);
+    spawnCatchCoinBurst(state, catchResult.x, catchResult.y - 8, totalReward);
     emitFloatingText(
       state.floatingTexts,
       catchResult.x,
@@ -984,6 +1195,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       Math.min(CATCH_FLASH_CAP, 0.04 + Math.min(0.15, totalReward / 400 * 0.095)),
     );
     if (comboBonus > 0) {
+      triggerTutorialHint(state, 'combo');
       state.floatingTexts.push({
         x: catchResult.x,
         y: catchResult.y - 52,
@@ -1043,6 +1255,9 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       updateAction(state, dt, commands);
       break;
   }
+
+  updateTutorialHintTimer(state, dt);
+  updateCatchCoinBursts(state, dt);
 
   if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
     updateNetVfx(state, dt, getGameRng());
@@ -1145,10 +1360,9 @@ function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | n
     const t = state.breachTimer;
     if (t > FADE + MOVE) return null;
     if (t <= FADE) {
-      const uFade = t / FADE;
       parentY = yEnd;
       surfaceScrollX = -scrollRange;
-      groupAlpha = easeOutCubic(smooth01(uFade));
+      groupAlpha = 1;
     } else {
       const tm = t - FADE;
       const u = smooth01(tm / MOVE);
@@ -1242,10 +1456,12 @@ export function getRenderState(state: FullGameState): RenderState {
         const isAggressive = current.type === FishType.Large
           && current.alive
           && current.age >= SHARK_AGGRO_DELAY
-          && !current.hasAttacked;
+          && !current.hasAttacked
+          && (current.sharkFleeTimer ?? 0) <= 0;
         const attackProgress = isAggressive
           ? Math.min(1, (current.age - SHARK_AGGRO_DELAY) / SHARK_ATTACK_GROW_SEC)
           : 0;
+        const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? SHARK_HIT_POINTS) : undefined;
         return {
           x: current.x,
           y: current.y,
@@ -1256,10 +1472,14 @@ export function getRenderState(state: FullGameState): RenderState {
           rotation,
           isAggressive,
           attackProgress,
+          isFleeing: current.type === FishType.Large && (current.sharkFleeTimer ?? 0) > 0,
+          hitPoints: sharkHp,
+          maxHitPoints: current.type === FishType.Large ? SHARK_HIT_POINTS : undefined,
         };
       }),
     particles: [...state.particles],
     floatingTexts: [...state.floatingTexts],
+    catchCoinBursts: state.catchCoinBursts.map((burst) => ({ ...burst })),
     money: state.money,
     hudMoneyDisplay,
     timeLeftFraction: ftue
@@ -1281,6 +1501,14 @@ export function getRenderState(state: FullGameState): RenderState {
     comboCount: state.comboCount,
     comboActive: state.comboTimer > 0 && state.comboCount > 1,
     oxyBoostActive: state.oxyBoostTimer > 0,
+    oxygenDamageTimer: state.oxygenDamageTimer,
+    oxygenDamageAmount: state.oxygenDamageAmount,
+    tutorialHint: state.tutorial.activeId == null
+      ? null
+      : {
+        id: state.tutorial.activeId,
+        ...TUTORIAL_HINT_COPY[state.tutorial.activeId],
+      },
     upgradePanelOpen: state.upgradePanelOpen,
     upgrades: { ...state.upgrades },
     upgradeCosts: getAllUpgradeCosts(state.upgrades),
@@ -1296,6 +1524,9 @@ export function getRenderState(state: FullGameState): RenderState {
     baitFraction: state.baitActive ? state.baitTimer / BAIT_DURATION : 0,
     oceanTransition: buildOceanTransitionDraw(state),
     transitionBackdrop: buildTransitionBackdropAlphas(state),
+    transitionUiAlpha: state.phase === GamePhase.Diving
+      ? Math.max(0, 1 - smooth01(state.diveTimer / 0.32))
+      : 1,
     breachShowBoatRevealOnly:
       state.phase === GamePhase.Breaching
       && state.breachTimer >= OCEAN_TRANSITION_FADE_SEC + OCEAN_TRANSITION_MOVE_SEC,
@@ -1303,6 +1534,7 @@ export function getRenderState(state: FullGameState): RenderState {
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
+    leaderboard: state.leaderboard,
     catchFlash: state.catchFlash,
     sharkBiteFlash: state.sharkBiteFlash,
     sharkBiteTeethElapsed: state.sharkBiteTeethElapsed,
@@ -1340,8 +1572,8 @@ export function getRenderState(state: FullGameState): RenderState {
       const chestScreenY = Math.min(CANVAS_HEIGHT - pad, Math.max(pad, raw.y));
       const elapsedSinceAward = tr.awarded ? tr.elapsed - tr.awardAtSec : 0;
       const coinCount = Math.min(
-        14,
-        Math.max(5, 4 + Math.floor(Math.log2(tr.value + 8))),
+        42,
+        Math.max(24, 14 + Math.floor(Math.log2(tr.value + 8)) * 3),
       );
       return {
         progress: p,

@@ -15,10 +15,9 @@ export function getHarpoonMuzzleWorldFromGrip(
   aimAngle: number,
 ): { x: number; y: number } {
   const drawH = HARPOON_GUN_DRAW_H;
-  const rotRad = Math.atan2(-Math.cos(aimAngle), -Math.sin(aimAngle));
   return {
-    x: gripX - drawH * Math.sin(rotRad),
-    y: gripY - drawH * Math.cos(rotRad),
+    x: gripX + Math.cos(aimAngle) * drawH,
+    y: gripY + Math.sin(aimAngle) * drawH,
   };
 }
 

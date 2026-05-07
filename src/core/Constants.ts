@@ -155,6 +155,11 @@ export const SHARK_ATTACK_DAMAGE = 7;    // time (seconds) lost per bite
 export const SHARK_ATTACK_CHARGE_SPEED = 285; // px/s toward the first-person anchor
 export const SHARK_ATTACK_GROW_SEC = 2.35;    // visual charge scale-up duration
 export const SHARK_BITE_FLASH_DECAY = 4.8;    // red overlay fade speed after a bite
+export const SHARK_HIT_POINTS = 3;
+export const SHARK_HIT_FLEE_SEC = 1.45;
+export const SHARK_BITE_FLEE_SEC = 2.2;
+export const SHARK_FLEE_SPEED = 360;
+export const OXYGEN_DAMAGE_VFX_SEC = 1.15;
 /** Full-screen teeth VFX when a shark bite lands (`elapsed` in game state; -1 = idle). */
 export const SHARK_BITE_VFX_TOTAL_SEC = 1.12;
 /** Split jaws rush toward center; keep under 0.5s. */
@@ -189,7 +194,7 @@ export const CATCH_FLASH_CAP = 0.2;
 
 // Boat screen — `BOAT_SHELL_*` = wide deck panel; `BOAT_DECK_CONTENT_INSET_H` = padding inside shell to content column.
 // For helpers see `src/shared/BoatUiLayout.ts`.
-export const UPGRADE_MARGIN = 20;
+export const UPGRADE_MARGIN = 12;
 /** Deck panel: full width inside outer margin (wider than the content column). */
 export const BOAT_SHELL_X = UPGRADE_MARGIN;
 export const BOAT_SHELL_W = CANVAS_WIDTH - 2 * UPGRADE_MARGIN;
@@ -197,7 +202,7 @@ export const BOAT_SHELL_W = CANVAS_WIDTH - 2 * UPGRADE_MARGIN;
  * Horizontal inset from shell inner edge → stats / upgrades / gear / DIVE (both sides).
  * Slightly tighter than the old 14px “sheet” pad so the content column gains width while the shell stays wide.
  */
-export const BOAT_DECK_CONTENT_INSET_H = 12;
+export const BOAT_DECK_CONTENT_INSET_H = 8;
 /** @deprecated use BOAT_DECK_CONTENT_INSET_H (kept equal for any stray references). */
 export const BOAT_SHEET_PAD = BOAT_DECK_CONTENT_INSET_H;
 export const UPGRADE_BUTTON_W = BOAT_SHELL_W - 2 * BOAT_DECK_CONTENT_INSET_H;
@@ -228,7 +233,7 @@ export const BOAT_MENU_UPGRADES_BLOCK_LIFT_PX = 40;
  * Horizontal inset of upgrades / gear / go-fish controls inside the section card plate.
  * Must match `getUpgradeButtonRect` / boat consumable hits in `UiLayout`.
  */
-export const BOAT_MENU_SECTION_INNER_PAD_X = 12;
+export const BOAT_MENU_SECTION_INNER_PAD_X = 8;
 export const BOAT_SECTION_CONTENT_X = BOAT_CONTENT_X + BOAT_MENU_SECTION_INNER_PAD_X;
 export const BOAT_SECTION_CONTENT_W = BOAT_CONTENT_W - 2 * BOAT_MENU_SECTION_INNER_PAD_X;
 /** Inset of the green GO FISH control inside the section content column (must match `UiLayout.isDiveButton`). */
@@ -237,7 +242,7 @@ export const BOAT_MENU_DIVE_BUTTON_INNER_PAD_X = 8;
 export const UPGRADE_BUTTON_H = 88;
 export const UPGRADE_BUTTON_GAP = 10;
 /** Extra px to push the upgrade/gear block down (tweak one number instead of retuning formulas). */
-export const BOAT_UPGRADES_VERTICAL_NUDGE_PX = 132;
+export const BOAT_UPGRADES_VERTICAL_NUDGE_PX = 204;
 /**
  * First upgrade row Y — scaled for 9:20 + `BOAT_UPGRADES_VERTICAL_NUDGE_PX`.
  * Legacy reference height 854 = old 9:16 logical canvas.
@@ -271,7 +276,7 @@ export const CONSUMABLE_Y =
 // Upgrade detail panel (full-screen overlay when a button is tapped)
 export const UPGRADE_PANEL_BUY_Y = CANVAS_HEIGHT - 120;
 export const UPGRADE_PANEL_BUY_H = 60;
-/** +20 vs legacy so consumables can sit higher while `DIVE_BUTTON_Y` stays fixed. */
+/** Gap between the top GO FISH card and the upgrades header. */
 export const DIVE_BUTTON_GAP = 40;
 export const BOAT_DECK_TOP_PAD = 20; // PANEL top → UPGRADES label; keep equal to DIVE_BUTTON_GAP
 /** Padding below DIVE inside the deck shell (visual breathing room). */
@@ -283,8 +288,13 @@ export const BOAT_SHELL_BELOW_DIVE = 18;
 export const BOAT_SHELL_MAX_BOTTOM = CANVAS_HEIGHT;
 /** Min gap from other full-screen UIs to canvas edge; do not use to cap the boat shell (see BOAT_SHELL_MAX_BOTTOM). */
 export const BOAT_SCREEN_EDGE = 10;
-export const DIVE_BUTTON_Y = CONSUMABLE_Y + CONSUMABLE_H + DIVE_BUTTON_GAP;
 export const DIVE_BUTTON_HEIGHT = 52;         // large tap target
+export const DIVE_BUTTON_Y =
+  UPGRADE_BUTTONS_TOP
+  - SECTION_HEADER_BLOCK_H
+  - UPGRADE_SECTION_HEADER_GAP
+  - DIVE_BUTTON_GAP
+  - DIVE_BUTTON_HEIGHT;
 export const DIVE_BUTTON_LABEL_Y_OFFSET = 3;
 export const NET_COST = 30;
 export const BAIT_COST = 45;
@@ -303,7 +313,7 @@ export const HARPOON_GUN_ANIM_TOTAL_SEC = HARPOON_GUN_ANIM_RISE_SEC + HARPOON_GU
 /** Extra downward offset on the grip anchor when idle/hidden (world +Y). Keep modest so the barrel still peeks in. */
 export const HARPOON_GUN_SLIDE_HIDDEN_PX = 72;
 /** Logical draw width for `gun_1.png` in the action view (height follows art aspect). */
-export const HARPOON_GUN_DRAW_W = 400;
+export const HARPOON_GUN_DRAW_W = 240;
 /** Matches `gun_1.png` aspect — used for muzzle offset from grip in world space (see SpearSystem). */
 const HARPOON_GUN_NATURAL_W = 1647;
 const HARPOON_GUN_NATURAL_H = 1372;
