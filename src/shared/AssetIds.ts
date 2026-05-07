@@ -69,6 +69,10 @@ export const AssetIds = {
 
   /** Bottom-anchored diving helmet (third-person frame) in underwater action. */
   helmet: 'helmet',
+  /** Menu→game dive cinematic: diver on deck (369×456). */
+  diverStand: 'diverStand',
+  /** Menu→game dive cinematic: mid-air jump (500×550). */
+  diverJump: 'diverJump',
 
   /** First-person harpoon gun (pivot top-center = muzzle / rope origin). */
   gun1: 'gun1',

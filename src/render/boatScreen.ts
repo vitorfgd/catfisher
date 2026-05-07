@@ -12,6 +12,7 @@ import {
   BOAT_SECTION_CONTENT_X,
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
+  getBoatBackgroundDrawRect,
   CONSUMABLE_GAP,
   CONSUMABLE_H,
   CONSUMABLE_W,
@@ -32,6 +33,7 @@ import {
   BOAT_MENU_SCRIM_ALPHA,
   getBoatStatsCardTopY,
 } from '../core/Constants';
+import { DIVE_TRANSITION } from '../core/diveTransitionConfig';
 import { AssetIds } from '../shared/AssetIds';
 import { getBoatContentColumn, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
@@ -113,7 +115,13 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   const HDR_H = 80;
   renderer.drawRectAlpha(Boat.card, 0.98, 0, 0, W, HDR_H);
   renderer.drawRectAlpha(Boat.sectionMint, 0.45, 0, HDR_H - 2, W, 2);
-  renderer.drawText('← BACK', M, 0, 120, HDR_H, t(18, C.muted, 'left', '700'));
+  if (state.upgradeBackHighlight) {
+    renderer.drawRoundRectAlpha(C.gold, 0.18, M - 10, 16, 126, 48, 14);
+    renderer.drawRoundRectAlpha(C.gold, 0.34, M - 8, 18, 122, 44, 13);
+    renderer.drawText('← BACK', M, 0, 132, HDR_H, tb(22, C.gold, 'left'));
+  } else {
+    renderer.drawText('← BACK', M, 0, 120, HDR_H, t(18, C.muted, 'left', '700'));
+  }
   renderer.drawText(UPGRADE_LABELS[id], 0, 0, W, HDR_H, tb(28, C.white, 'center'));
 
   const curName = UPGRADE_LEVEL_NAMES[id][level - 1];
@@ -250,33 +258,46 @@ function drawSectionHeader(
   renderer.drawText(label, x + 12, y + 4, w - 12, H - 14, t(30, accent, 'left', '800'));
 }
 
-function drawBoatTutorialHint(renderer: GameRenderer, state: RenderState): void {
-  const hint = state.tutorialHint;
-  if (hint == null) return;
-  const w = 360;
-  const h = 80;
-  const x = (CANVAS_WIDTH - w) / 2;
-  const y = 126;
-  renderer.drawRoundRectAlpha(C.bg, 0.91, x, y, w, h, 18);
-  renderer.drawRoundRectAlpha(C.teal, 0.13, x + 3, y + 3, w - 6, h - 6, 15);
-  renderer.drawText(hint.title.toUpperCase(), x + 16, y + 10, w - 32, 22, t(16, C.teal, 'left', '800'));
-  renderer.drawText(hint.body, x + 16, y + 36, w - 32, 34, t(13, C.white, 'left', '700'));
-}
-
 export function drawBoatBackgroundLayer(renderer: GameRenderer, alpha = 1): void {
-  const zoom = 1.12;
-  const drawW = CANVAS_WIDTH * zoom;
-  const drawH = CANVAS_HEIGHT * zoom;
-  const drawY = -10;
+  const { x, y, w, h } = getBoatBackgroundDrawRect();
   if (alpha >= 0.999) {
-    renderer.drawImage({ id: AssetIds.boatBg }, (CANVAS_WIDTH - drawW) / 2, drawY, drawW, drawH);
+    renderer.drawImage({ id: AssetIds.boatBg }, x, y, w, h);
   } else if (alpha > 0.002) {
-    renderer.drawImageAlpha({ id: AssetIds.boatBg }, (CANVAS_WIDTH - drawW) / 2, drawY, drawW, drawH, alpha);
+    renderer.drawImageAlpha({ id: AssetIds.boatBg }, x, y, w, h, alpha);
   }
 }
 
 export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
   drawBoatBackgroundLayer(renderer);
+}
+
+export function getBoatStandingDiverRect(): { x: number; y: number; w: number; h: number } {
+  const D = DIVE_TRANSITION;
+  const boat = getBoatBackgroundDrawRect();
+  const w = D.diverDrawWidth;
+  const h = (w * D.diverStandNaturalH) / D.diverStandNaturalW;
+  const anchorX = boat.x + D.diverDeckAnchor.xFrac * boat.w;
+  const anchorY = boat.y + D.diverDeckAnchor.yFrac * boat.h;
+  return {
+    x: anchorX - w * 0.5,
+    y: anchorY - h * D.diverStandFeetPivotY,
+    w,
+    h,
+  };
+}
+
+export function drawBoatStandingDiver(renderer: GameRenderer, alpha = 1): void {
+  const r = getBoatStandingDiverRect();
+  if (alpha >= 0.999) {
+    renderer.drawImage({ id: AssetIds.diverStand }, r.x, r.y, r.w, r.h);
+  } else if (alpha > 0.002) {
+    renderer.drawImageAlpha({ id: AssetIds.diverStand }, r.x, r.y, r.w, r.h, alpha);
+  }
+}
+
+export function drawBoatSceneLayer(renderer: GameRenderer, alpha = 1): void {
+  drawBoatBackgroundLayer(renderer, alpha);
+  drawBoatStandingDiver(renderer, alpha);
 }
 
 /** Main-menu chrome (stats, upgrades, gear, go fish). */
@@ -348,7 +369,8 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const diveW = secW - diveInnerPad * 2;
   const loopPressed = state.phase === GamePhase.Boat && Math.floor(Date.now() / 520) % 2 === 0;
   const loopPressY = loopPressed ? 5 : 0;
-  const pressP = state.phase === GamePhase.Diving ? Math.max(0.65, 1 - state.transitionUiAlpha) : 0;
+  const menuUiA = state.diveTransition?.menuUiAlpha ?? 1;
+  const pressP = state.phase === GamePhase.Diving ? Math.max(0.65, 1 - menuUiA) : 0;
   const pressY = Math.max(loopPressY, Math.min(7, Math.max(0, pressP * 7)));
   const shadowOffset = Math.max(2, 10 - pressY);
   renderer.drawRoundRectAlpha('rgba(64,220,170,0.36)', 1, diveX, DIVE_BUTTON_Y + shadowOffset, diveW, DIVE_BUTTON_HEIGHT, 14);
@@ -385,6 +407,19 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
       rect.w,
       rect.h,
     );
+  }
+  if (state.ftuePrompt === 'upgradeHarpoon' && state.upgradePanelOpen === null) {
+    const rect = getUpgradeButtonRect(0);
+    const pulse = 0.68 + 0.32 * Math.sin(Date.now() / 180);
+    renderer.drawRoundRectAlpha(C.gold, 0.20 + pulse * 0.18, rect.x - 6, rect.y - 6, rect.w + 12, rect.h + 12, 18);
+    const press = (Date.now() % 380) / 380;
+    const dip = (press < 0.16 ? press / 0.16 : 1 - (press - 0.16) / 0.84) * 9;
+    const tipX = rect.x + 52;
+    const tipY = rect.y + 42 + dip;
+    const handPx = 60;
+    renderer.pushRotate(30, tipX, tipY);
+    renderer.drawImage({ id: AssetIds.ftueHand }, tipX - 0.88 * handPx, tipY - 0.5 * handPx, handPx, handPx);
+    renderer.pop();
   }
 
   const gearCardTop = GEAR_HEADER_LABEL_Y - sectionPadY;
@@ -423,7 +458,6 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
-  drawBoatBackgroundOnly(renderer);
+  drawBoatSceneLayer(renderer);
   drawBoatMenuUi(renderer, state);
-  drawBoatTutorialHint(renderer, state);
 }

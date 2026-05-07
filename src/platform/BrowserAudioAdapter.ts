@@ -69,6 +69,10 @@ export class BrowserAudioAdapter implements AudioAdapter {
       case 'diveStarted':
         this.playTone(220, 0.35, 0.15, 'sine');
         break;
+      case 'diverJumped':
+        this.playTone(520, 0.055, 0.12, 'triangle');
+        setTimeout(() => this.playTone(780, 0.085, 0.14, 'triangle'), 45);
+        break;
       case 'runEnded':
         this.playTone(520, 0.14, 0.18, 'triangle');
         setTimeout(() => this.playTone(400, 0.18, 0.16, 'triangle'), 160);

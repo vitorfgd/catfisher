@@ -14,9 +14,15 @@ import {
 export type { GameEvent } from './Types';
 
 import type { GameInputCommand } from '../shared/InputCommands';
-import type { OceanTransitionDraw } from '../render/oceanTransition';
 import type { RenderState } from '../render/RenderState';
 
+import {
+  buildDiveTransitionDraw,
+  isBreachLeaderboardListening,
+  playGameToMenuTransition,
+  playMenuToGameTransition,
+  updateDiveTransition,
+} from './diveTransitionController';
 import { getGameRng } from './GameRng';
 import type { Rng } from './Rng';
 import { actionWorldToCanvas, canvasToActionWorld, getActionViewZoomForSession } from './ActionViewTransform';
@@ -29,19 +35,7 @@ import {
   BAIT_SCHOOL_FISH_COUNT,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
-  OCEAN_BUBBLE_FADE_IN_SEC,
-  OCEAN_BUBBLE_RISE_SPEED,
   OCEAN_BREACH_TOTAL_SEC,
-  OCEAN_DIVE_TOTAL_SEC,
-  OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC,
-  OCEAN_TRANSITION_BUBBLE_COUNT,
-  OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE,
-  OCEAN_TRANSITION_FADE_SEC,
-  OCEAN_TRANSITION_MOVE_SEC,
-  OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC,
-  OCEAN_SURFACE_DRAW_H,
-  OCEAN_SURFACE_NATURAL_H,
-  OCEAN_SURFACE_NATURAL_W,
   TREASURE_REVEAL_AWARD_AT_SEC,
   TREASURE_REVEAL_DURATION_SEC,
   TREASURE_MONEY_LERP_SEC,
@@ -77,13 +71,17 @@ import {
   SHARK_ATTACK_DAMAGE,
   SHARK_ATTACK_GROW_SEC,
   SHARK_ATTACK_RANGE,
+  SHARK_ATTACK_STAGE_MARGIN_X,
+  SHARK_ATTACK_STAGE_MAX_Y_FRAC,
+  SHARK_ATTACK_STAGE_MIN_Y_FRAC,
+  SHARK_ATTACK_STAGE_SPEED,
   SHARK_BITE_FLASH_DECAY,
   SHARK_BITE_VFX_TOTAL_SEC,
-  SHARK_BITE_FLEE_SEC,
   SHARK_FLEE_SPEED,
   SHARK_HIT_FLEE_SEC,
-  SHARK_HIT_POINTS,
   SHARK_MAX_ALIVE,
+  SHARK_REATTACK_WAIT_MAX_SEC,
+  SHARK_REATTACK_WAIT_MIN_SEC,
   OXYGEN_DAMAGE_VFX_SEC,
   TREASURE_SPAWN_INTERVAL,
   UPGRADE_MAX_LEVEL,
@@ -139,9 +137,15 @@ import {
   updateParticles,
 } from './ParticleSystem';
 
-const FTUE_SHOWCASE_FISH_SCALE = 1.58;
 const TUTORIAL_HINT_DURATION_SEC = 4.2;
 const CATCH_COIN_BURST_LIFE_SEC = 0.78;
+const FTUE_TREASURE_SPAWN_DELAY_SEC = 2.6;
+const FTUE_TREASURE_SCALE_IN_SEC = 0.55;
+const FTUE_TREASURE_PRE_ZOOM_HOLD_SEC = 0.5;
+const FTUE_TREASURE_ZOOM_IN_SEC = 0.75;
+const FTUE_TREASURE_ZOOM_HOLD_SEC = 0.7;
+const FTUE_TREASURE_ZOOM_OUT_SEC = 0.75;
+const FTUE_TREASURE_ZOOM_MAX = 1.28;
 const TUTORIAL_HINT_COPY: Record<TutorialHintId, { title: string; body: string }> = {
   catchBasics: {
     title: 'Catch fish, then reel them in',
@@ -177,6 +181,17 @@ function createTutorialSeenState(): TutorialSeenState {
     gear: false,
     upgrades: false,
     combo: false,
+  };
+}
+
+function createFtueRuntimeState(): FullGameState['ftue'] {
+  return {
+    stage: 'none',
+    prompt: null,
+    treasureIntroTimer: 0,
+    freeConsumablesGranted: false,
+    usedNet: false,
+    usedBait: false,
   };
 }
 
@@ -217,6 +232,41 @@ function setSharkFleeVelocity(fish: { x: number; y: number; vx: number; vy: numb
   fish.vy = (dy / dist) * speed;
 }
 
+function getSharkVisibleStagePoint(fish: { x: number; y: number }): { x: number; y: number } {
+  const minY = CANVAS_HEIGHT * SHARK_ATTACK_STAGE_MIN_Y_FRAC;
+  const maxY = CANVAS_HEIGHT * SHARK_ATTACK_STAGE_MAX_Y_FRAC;
+  const stageX = fish.x < CANVAS_WIDTH / 2
+    ? SHARK_ATTACK_STAGE_MARGIN_X
+    : CANVAS_WIDTH - SHARK_ATTACK_STAGE_MARGIN_X;
+  return {
+    x: stageX,
+    y: Math.max(minY, Math.min(maxY, fish.y)),
+  };
+}
+
+function moveSharkTowardStagePoint(fish: { x: number; y: number; vx: number; vy: number }): boolean {
+  const target = getSharkVisibleStagePoint(fish);
+  const dx = target.x - fish.x;
+  const dy = target.y - fish.y;
+  const dist = Math.hypot(dx, dy);
+  if (dist < 18) {
+    fish.vx = 0;
+    fish.vy = 0;
+    return true;
+  }
+  fish.vx = (dx / dist) * SHARK_ATTACK_STAGE_SPEED;
+  fish.vy = (dy / dist) * SHARK_ATTACK_STAGE_SPEED;
+  return false;
+}
+
+function getSharkHitsToKill(speargunLevel: number): number {
+  return Math.max(1, 5 - Math.max(1, Math.min(4, speargunLevel)));
+}
+
+function getSharkReattackWait(rng: Rng): number {
+  return rng.between(SHARK_REATTACK_WAIT_MIN_SEC, SHARK_REATTACK_WAIT_MAX_SEC);
+}
+
 function spawnCatchCoinBurst(state: FullGameState, x: number, y: number, value: number): void {
   state.catchCoinBursts.push({
     x,
@@ -225,6 +275,101 @@ function spawnCatchCoinBurst(state: FullGameState, x: number, y: number, value: 
     elapsed: 0,
     coinCount: Math.min(12, Math.max(4, 3 + Math.floor(Math.log2(value + 4)))),
   });
+}
+
+function spawnFtueIncomingShark(state: FullGameState): void {
+  state.fish = [{
+    id: state.nextFishId++,
+    x: CANVAS_WIDTH * 0.5,
+    y: CANVAS_HEIGHT * 0.36,
+    vx: 0,
+    vy: 0,
+    wanderTimer: 9999,
+    age: SHARK_AGGRO_DELAY,
+    hasAttacked: false,
+    type: FishType.Large,
+    alive: true,
+    hitFlash: 0,
+    drawScale: 1.22,
+    hitPoints: 1,
+    sharkAttackPhase: 'charging',
+    sharkChargeTimer: SHARK_ATTACK_GROW_SEC,
+  }];
+}
+
+function completeFtue(state: FullGameState): void {
+  if (state.ftue.stage === 'complete') return;
+  state.ftue.stage = 'complete';
+  state.ftue.prompt = null;
+  state.ftueActive = false;
+  state.pendingEvents.push({ type: 'ftueDiveExited' });
+}
+
+function getFtueTreasureReward(state: FullGameState): number {
+  return state.upgrades.speargun < UPGRADE_MAX_LEVEL
+    ? getUpgradeCost('speargun', state.upgrades.speargun)
+    : getUpgradeCost('speargun', 1);
+}
+
+function spawnFtueTreasureChest(state: FullGameState): void {
+  if (state.fish.some((fish) => fish.alive && fish.fixedCatchValue != null)) return;
+  state.ftue.treasureIntroTimer = 0;
+  state.ftue.prompt = 'treasureIntro';
+  state.fish.push({
+    id: state.nextFishId++,
+    x: CANVAS_WIDTH * 0.5,
+    y: Math.round(CANVAS_HEIGHT * 0.38),
+    vx: 0,
+    vy: 0,
+    wanderTimer: 9999,
+    age: 0,
+    hasAttacked: false,
+    type: FishType.Treasure,
+    alive: true,
+    hitFlash: 0,
+    drawScale: 0.12,
+    fixedCatchValue: getFtueTreasureReward(state),
+  });
+}
+
+function getFtueTreasureIntroTotalSec(): number {
+  return FTUE_TREASURE_PRE_ZOOM_HOLD_SEC
+    + FTUE_TREASURE_ZOOM_IN_SEC
+    + FTUE_TREASURE_ZOOM_HOLD_SEC
+    + FTUE_TREASURE_ZOOM_OUT_SEC;
+}
+
+function getFtueTreasureZoom(timer: number): number {
+  const zoomTimer = Math.max(0, timer - FTUE_TREASURE_PRE_ZOOM_HOLD_SEC);
+  const inEnd = FTUE_TREASURE_ZOOM_IN_SEC;
+  const holdEnd = inEnd + FTUE_TREASURE_ZOOM_HOLD_SEC;
+  const outEnd = holdEnd + FTUE_TREASURE_ZOOM_OUT_SEC;
+  let p = 0;
+  if (zoomTimer < inEnd) {
+    p = zoomTimer / Math.max(1e-6, FTUE_TREASURE_ZOOM_IN_SEC);
+  } else if (zoomTimer < holdEnd) {
+    p = 1;
+  } else if (zoomTimer < outEnd) {
+    p = 1 - (zoomTimer - holdEnd) / Math.max(1e-6, FTUE_TREASURE_ZOOM_OUT_SEC);
+  }
+  const u = Math.min(1, Math.max(0, p));
+  const smooth = u * u * (3 - 2 * u);
+  return 1 + (FTUE_TREASURE_ZOOM_MAX - 1) * smooth;
+}
+
+function getFtueTreasureFocusBlend(timer: number): number {
+  const zoomTimer = Math.max(0, timer - FTUE_TREASURE_PRE_ZOOM_HOLD_SEC);
+  const u = Math.min(1, Math.max(0, zoomTimer / Math.max(1e-6, FTUE_TREASURE_ZOOM_IN_SEC)));
+  return u * u * (3 - 2 * u);
+}
+
+function markFtueConsumableUsed(state: FullGameState, id: 'net' | 'bait'): void {
+  if (state.ftue.stage !== 'secondDiveConsumables') return;
+  if (id === 'net') state.ftue.usedNet = true;
+  if (id === 'bait') state.ftue.usedBait = true;
+  if (state.ftue.usedNet && state.ftue.usedBait) {
+    completeFtue(state);
+  }
 }
 
 function updateCatchCoinBursts(state: FullGameState, dt: number): void {
@@ -252,63 +397,8 @@ function decayHudConsumableFlash(state: FullGameState, dt: number): void {
   state.hudConsumableFlash.bait = Math.max(0, state.hudConsumableFlash.bait - dt);
 }
 
-function smooth01(t: number): number {
-  const u = Math.min(1, Math.max(0, t));
-  return u * u * (3 - 2 * u);
-}
-
-function easeOutCubic(t: number): number {
-  const u = Math.min(1, Math.max(0, t));
-  return 1 - (1 - u) ** 3;
-}
-
-function oceanSurfaceLayout(): { surfaceDrawH: number; surfaceDrawW: number; scrollRange: number } {
-  const surfaceDrawH = OCEAN_SURFACE_DRAW_H;
-  const surfaceDrawW = (OCEAN_SURFACE_NATURAL_W / OCEAN_SURFACE_NATURAL_H) * surfaceDrawH;
-  return { surfaceDrawH, surfaceDrawW, scrollRange: Math.max(0, surfaceDrawW - CANVAS_WIDTH) };
-}
-
-function diveParentYEndpoints(): { yStart: number; yEnd: number } {
-  const { surfaceDrawH } = oceanSurfaceLayout();
-  return {
-    yStart: CANVAS_HEIGHT + surfaceDrawH + 24,
-    yEnd: -surfaceDrawH - 28,
-  };
-}
-
-function spawnOceanBubbles(state: FullGameState, rng: Rng): void {
-  state.oceanBubblesSpawned = true;
-  const { surfaceDrawH } = oceanSurfaceLayout();
-  for (let i = 0; i < OCEAN_TRANSITION_BUBBLE_COUNT; i += 1) {
-    state.oceanBubbles.push({
-      lx: rng.between(24, CANVAS_WIDTH - 24),
-      ly: rng.between(surfaceDrawH + 36, Math.min(CANVAS_HEIGHT * 0.96, CANVAS_HEIGHT - 40)),
-      variant: Math.floor(rng.next() * 7),
-      age: 0,
-    });
-  }
-}
-
-function updateOceanBubblesCore(state: FullGameState, dt: number): void {
-  for (const b of state.oceanBubbles) {
-    b.age += dt;
-    b.ly -= OCEAN_BUBBLE_RISE_SPEED * dt;
-  }
-  state.oceanBubbles = state.oceanBubbles.filter((b) => b.ly > -160);
-}
-
 /**
- * Cluster above the bottom-fixed turret; [0] = hand + tap target.
- * Kept low enough for the starting spear range to reach every showcase fish.
- */
-const FTUE_SHOWCASE_FISH: ReadonlyArray<{ x: number; y: number; type: FishType }> = [
-  { x: PLAYER_X - 96, y: Math.round((432 * CANVAS_HEIGHT) / 854), type: FishType.Small },
-  { x: PLAYER_X + 108, y: Math.round((434 * CANVAS_HEIGHT) / 854), type: FishType.Small },
-  { x: PLAYER_X - 4, y: Math.round((362 * CANVAS_HEIGHT) / 854), type: FishType.Medium },
-];
-
-/**
- * Insta-hook FTUE: jump straight to Action, frozen fish, timer paused until first tap.
+ * Scripted FTUE: jump straight to Action, stage a shark, then gift upgrade currency.
  * Caller should only run when local / platform says first visit.
  */
 export function bootstrapActionFtueDive(state: FullGameState): void {
@@ -316,47 +406,14 @@ export function bootstrapActionFtueDive(state: FullGameState): void {
   state.phase = GamePhase.Action;
   state.diveTimer = 0;
   resetForNewDive(state);
-  state.fish = [];
-  let id = state.nextFishId;
-  for (const row of FTUE_SHOWCASE_FISH) {
-    state.fish.push({
-      id: id++,
-      x: row.x,
-      y: row.y,
-      vx: 0,
-      vy: 0,
-      wanderTimer: 9999,
-      age: 0,
-      hasAttacked: false,
-      type: row.type,
-      drawScale: FTUE_SHOWCASE_FISH_SCALE,
-      ftueShowcase: true,
-      alive: true,
-      hitFlash: 0,
-    });
-  }
-  state.nextFishId = id;
+  state.ftue = createFtueRuntimeState();
+  state.ftue.stage = 'sharkEncounter';
+  state.ftue.prompt = 'tapFightBack';
+  spawnFtueIncomingShark(state);
   state.fishSpawnTimer = 8_000_000_000_000;
   state.treasureSpawnTimer = 8_000_000_000_000;
   state.bossSpawnTimer = 8_000_000_000_000;
   state.pendingEvents.push({ type: 'diveStarted' });
-}
-
-function exitFtueDiveState(state: FullGameState): void {
-  if (!state.ftueActive) return;
-  const rng = getGameRng();
-  state.ftueActive = false;
-  state.fishSpawnTimer = 0.1;
-  state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
-  state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
-  for (const f of state.fish) {
-    if (!f.alive) continue;
-    const dir = rng.next() < 0.5 ? 1 : -1;
-    f.vx = dir * rng.between(22, 40);
-    f.vy = rng.between(-18, 18);
-    f.wanderTimer = rng.between(3.2, 5.5);
-  }
-  state.pendingEvents.push({ type: 'ftueDiveExited' });
 }
 
 export function createInitialState(): FullGameState {
@@ -410,6 +467,10 @@ export function createInitialState(): FullGameState {
     breachTimer: 0,
     oceanBubbles: [],
     oceanBubblesSpawned: false,
+    diveJumpSfxPlayed: false,
+    breachLeaderboardDismissed: false,
+    breachLeaderboardFadeElapsed: 0,
+    upgradeBackHighlightTimer: 0,
     pendingEvents: [],
     hudConsumableFlash: { net: 0, bait: 0 },
     netVfx: null,
@@ -419,6 +480,7 @@ export function createInitialState(): FullGameState {
       activeId: null,
       activeTimer: 0,
     },
+    ftue: createFtueRuntimeState(),
     leaderboard: {
       bestFishCaught: 0,
       lastSubmittedFishCaught: 0,
@@ -462,20 +524,21 @@ function resetForNewDive(state: FullGameState): void {
   state.hudConsumableFlash = { net: 0, bait: 0 };
   state.netVfx = null;
   state.harpoonGunAnimElapsed = -1;
+  state.breachLeaderboardDismissed = false;
+  state.breachLeaderboardFadeElapsed = 0;
 }
 
 function beginBreaching(state: FullGameState): void {
   clearNetVfxApplyingIfNeeded(state, getGameRng());
   state.roundTimeLeft = 0;
-  state.phase = GamePhase.Breaching;
-  state.breachTimer = 0;
-  state.oceanBubbles = [];
-  state.oceanBubblesSpawned = false;
-  state.harpoonGunAnimElapsed = -1;
+  state.breachLeaderboardDismissed = false;
+  state.breachLeaderboardFadeElapsed = 0;
+  playGameToMenuTransition(state);
 }
 
 function finalizeRunToBoat(state: FullGameState): void {
   clearNetVfxApplyingIfNeeded(state, getGameRng());
+  state.diveJumpSfxPlayed = false;
   state.phase = GamePhase.Boat;
   state.lastRunEarnings = state.sessionEarnings;
   state.lastRunDurationSec = state.sessionTime;
@@ -505,19 +568,29 @@ function finalizeRunToBoat(state: FullGameState): void {
     runDurationSec: state.lastRunDurationSec,
     catchCount: state.lastRunCatchCount,
   });
-  if (state.lastRunCatchCount > 0) triggerTutorialHint(state, 'upgrades');
+  if (state.ftue.stage === 'treasureUpgrade') {
+    state.ftue.prompt = 'upgradeHarpoon';
+    state.upgradePanelOpen = null;
+    state.upgradeBackHighlightTimer = 2.4;
+  } else if (state.lastRunCatchCount > 0) {
+    triggerTutorialHint(state, 'upgrades');
+  }
 }
 
 function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
   for (const command of commands) {
     if (command.type === 'divePress') {
       state.upgradePanelOpen = null;
-      state.phase = GamePhase.Diving;
-      state.diveTimer = 0;
-      state.oceanBubbles = [];
-      state.oceanBubblesSpawned = false;
       resetForNewDive(state);
-      state.pendingEvents.push({ type: 'diveStarted' });
+      if (state.ftue.stage === 'secondDiveConsumables') {
+        if (!state.ftue.freeConsumablesGranted) {
+          state.consumables.net = Math.min(NET_MAX_STOCK, state.consumables.net + 1);
+          state.consumables.bait = Math.min(BAIT_MAX_STOCK, state.consumables.bait + 1);
+          state.ftue.freeConsumablesGranted = true;
+        }
+        state.ftue.prompt = 'useConsumables';
+      }
+      playMenuToGameTransition(state);
       continue;
     }
 
@@ -535,8 +608,15 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
       if (state.money < cost) continue;
       state.money -= cost;
       state.upgrades[id] += 1;
+      state.upgradeBackHighlightTimer = 2.4;
       state.pendingEvents.push({ type: 'upgradeBought', id });
-      triggerTutorialHint(state, 'upgrades');
+      if (state.ftue.stage === 'treasureUpgrade' && id === 'speargun') {
+        state.ftue.stage = 'secondDiveConsumables';
+        state.ftue.prompt = null;
+        state.upgradePanelOpen = null;
+      } else {
+        triggerTutorialHint(state, 'upgrades');
+      }
       continue;
     }
 
@@ -595,42 +675,18 @@ function updateTreasureReveal(state: FullGameState, dt: number, r: Rng): void {
 }
 
 function updateDiving(state: FullGameState, dt: number): void {
-  const rng = getGameRng();
-  state.diveTimer += dt;
-  const t = state.diveTimer;
-  const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
-  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
-
-  if (t >= P + MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE && !state.oceanBubblesSpawned) {
-    spawnOceanBubbles(state, rng);
-  }
-  updateOceanBubblesCore(state, dt);
-
-  if (t >= OCEAN_DIVE_TOTAL_SEC) {
-    state.diveTimer = OCEAN_DIVE_TOTAL_SEC;
-    state.phase = GamePhase.Action;
-    state.oceanBubbles = [];
-  }
+  updateDiveTransition(state, dt);
 }
 
-function updateBreaching(state: FullGameState, dt: number): void {
-  const rng = getGameRng();
-  state.breachTimer += dt;
-  const t = state.breachTimer;
-  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
-  const FADE = OCEAN_TRANSITION_FADE_SEC;
-  const moveElapsed = t - FADE;
-
+function updateBreaching(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
   if (
-    moveElapsed >= MOVE * OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE
-    && !state.oceanBubblesSpawned
-    && moveElapsed > 0
+    isBreachLeaderboardListening(state)
+    && commands.some((command) => command.type === 'tap')
   ) {
-    spawnOceanBubbles(state, rng);
+    state.breachLeaderboardDismissed = true;
   }
-  updateOceanBubblesCore(state, dt);
-
-  if (t >= OCEAN_BREACH_TOTAL_SEC) {
+  updateDiveTransition(state, dt);
+  if (state.breachTimer >= OCEAN_BREACH_TOTAL_SEC) {
     state.breachTimer = OCEAN_BREACH_TOTAL_SEC;
     state.oceanBubbles = [];
     finalizeRunToBoat(state);
@@ -735,22 +791,31 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     state.oxygenDamageTimer = Math.max(0, state.oxygenDamageTimer - dt);
   }
 
-  if (state.ftueActive) {
-    for (const c of commands) {
-      if (c.type === 'useConsumable') {
-        return;
-      }
+  if (state.ftue.stage === 'sharkEncounter' && state.ftueActive) {
+    if (!commands.some((command) => command.type === 'tap')) {
+      return;
     }
+    state.ftueActive = false;
+    state.ftue.prompt = null;
+    state.fishSpawnTimer = 0.1;
+    state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
   }
 
-  if (state.ftueActive) {
-    for (const c of commands) {
-      if (c.type === 'tap') {
-        exitFtueDiveState(state);
-        break;
+  if (state.ftue.stage === 'firstTreasureIntro') {
+    const chest = state.fish.find((fish) => fish.alive && fish.fixedCatchValue != null);
+    if (chest != null) {
+      state.ftue.treasureIntroTimer += dt;
+      chest.x = CANVAS_WIDTH * 0.5;
+      chest.vx = 0;
+      chest.vy = 0;
+      const scaleP = Math.min(1, state.ftue.treasureIntroTimer / FTUE_TREASURE_SCALE_IN_SEC);
+      const scaleU = scaleP * scaleP * (3 - 2 * scaleP);
+      chest.drawScale = 0.12 + (1.28 - 0.12) * scaleU;
+      state.ftue.prompt = 'treasureIntro';
+      if (state.ftue.treasureIntroTimer >= getFtueTreasureIntroTotalSec()) {
+        state.ftue.stage = 'firstTreasureCatch';
+        state.ftue.prompt = 'catchTreasure';
       }
-    }
-    if (state.ftueActive) {
       return;
     }
   }
@@ -763,6 +828,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   }
 
   const canShoot = state.player.shootCooldown <= 0 && state.spears.length === 0;
+  const ftueTreasurePaused = state.ftue.stage === 'firstTreasureCatch';
 
   for (const command of commands) {
     // Consumable use
@@ -772,6 +838,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         state.consumables.net -= 1;
         state.netVfx = { elapsed: 0, catchesApplied: false };
         state.hudConsumableFlash.net = 0.34;
+          markFtueConsumableUsed(state, 'net');
       } else if (command.id === 'bait' && state.consumables.bait > 0) {
         state.consumables.bait -= 1;
         state.baitActive = true;
@@ -814,6 +881,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
           }
         }
         state.hudConsumableFlash.bait = 0.34;
+        markFtueConsumableUsed(state, 'bait');
       }
       continue;
     }
@@ -856,6 +924,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     state.player.shootCooldown = Math.max(0, state.player.shootCooldown - dt);
   }
 
+  if (!ftueTreasurePaused) {
   if (state.comboTimer > 0) {
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer === 0) {
@@ -937,8 +1006,13 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   // Treasure fish — periodic spawn, every wave / dive
   state.treasureSpawnTimer -= dt;
   if (state.treasureSpawnTimer <= 0) {
-    state.fish.push(spawnFishOfType(state.nextFishId++, rng, FishType.Treasure));
-    state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
+    if (state.ftue.stage === 'firstTreasureIntro') {
+      spawnFtueTreasureChest(state);
+      state.treasureSpawnTimer = 8_000_000_000_000;
+    } else {
+      state.fish.push(spawnFishOfType(state.nextFishId++, rng, FishType.Treasure));
+      state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
+    }
   }
 
   // Rock boss — timer always runs; only spawns once min time + first delay / interval (was stuck before 28s)
@@ -969,24 +1043,69 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
   // ── Shark attack ─────────────────────────────────────────────────────────
   let sharkBiteThisFrame = false;
+  const sharkMaxHp = getSharkHitsToKill(state.upgrades.speargun);
   for (const fish of state.fish) {
     if (fish.type !== FishType.Large || !fish.alive) continue;
-    if ((fish.hitPoints ?? SHARK_HIT_POINTS) > 0 && fish.hitPoints == null) {
-      fish.hitPoints = SHARK_HIT_POINTS;
+    if ((fish.hitPoints ?? sharkMaxHp) > 0 && fish.hitPoints == null) {
+      fish.hitPoints = sharkMaxHp;
     }
     if ((fish.sharkFleeTimer ?? 0) > 0) {
-      fish.sharkFleeTimer = Math.max(0, (fish.sharkFleeTimer ?? 0) - dt);
+      const nextFlee = Math.max(0, (fish.sharkFleeTimer ?? 0) - dt);
+      fish.sharkFleeTimer = nextFlee;
       setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
+      if (nextFlee === 0) {
+        const margin = 80;
+        const stillOnScreen = fish.x > -margin
+          && fish.x < CANVAS_WIDTH + margin
+          && fish.y > -margin
+          && fish.y < CANVAS_HEIGHT + margin;
+        if (stillOnScreen) {
+          fish.sharkFleeTimer = 0.25;
+          continue;
+        }
+        // Flee time should cool down the shark, then hold before this same wounded shark re-stages.
+        fish.vx = 0;
+        fish.vy = 0;
+        fish.age = 0;
+        fish.hasAttacked = false;
+        fish.sharkAttackPhase = undefined;
+        fish.sharkChargeTimer = 0;
+        fish.sharkReattackTimer = getSharkReattackWait(rng);
+      }
+      continue;
+    }
+    if ((fish.sharkReattackTimer ?? 0) > 0) {
+      const nextWait = Math.max(0, (fish.sharkReattackTimer ?? 0) - dt);
+      fish.sharkReattackTimer = nextWait;
+      fish.vx = 0;
+      fish.vy = 0;
+      if (nextWait === 0) {
+        fish.age = SHARK_AGGRO_DELAY;
+        fish.hasAttacked = false;
+      }
       continue;
     }
     if (fish.hasAttacked) continue;
     if (fish.age < SHARK_AGGRO_DELAY) continue;
     triggerTutorialHint(state, 'shark');
+    if (fish.sharkAttackPhase == null) {
+      fish.sharkAttackPhase = 'staging';
+      fish.sharkChargeTimer = 0;
+    }
+    if (fish.sharkAttackPhase === 'staging') {
+      const staged = moveSharkTowardStagePoint(fish);
+      if (staged) {
+        fish.sharkAttackPhase = 'charging';
+        fish.sharkChargeTimer = 0;
+      }
+      continue;
+    }
+    fish.sharkChargeTimer = (fish.sharkChargeTimer ?? 0) + dt;
     const dx = fish.x - PLAYER_X;
     const dy = fish.y - PLAYER_Y;
     const dist = Math.sqrt(dx * dx + dy * dy);
     if (dist > 1) {
-      const chargeP = Math.min(1, Math.max(0, (fish.age - SHARK_AGGRO_DELAY) / SHARK_ATTACK_GROW_SEC));
+      const chargeP = Math.min(1, Math.max(0, (fish.sharkChargeTimer ?? 0) / SHARK_ATTACK_GROW_SEC));
       const accel = 0.32 + 0.68 * chargeP * chargeP * chargeP;
       const chargeSpeed = SHARK_ATTACK_CHARGE_SPEED * accel;
       fish.vx = (-dx / dist) * chargeSpeed;
@@ -994,11 +1113,16 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     }
     if (!sharkBiteThisFrame && dist < SHARK_ATTACK_RANGE) {
       sharkBiteThisFrame = true;
+      fish.persistentShark = false;
       fish.hasAttacked = true;
       fish.hitFlash = 1.0;
-      fish.sharkFleeTimer = SHARK_BITE_FLEE_SEC;
+      fish.sharkFleeTimer = 0;
       fish.age = 0;
-      setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
+      fish.sharkAttackPhase = undefined;
+      fish.sharkChargeTimer = 0;
+      fish.vx = 0;
+      fish.vy = 0;
+      fish.alive = false;
       state.sharkBiteFlash = 1;
       state.sharkBiteTeethElapsed = 0;
       state.roundTimeLeft = Math.max(0, state.roundTimeLeft - SHARK_ATTACK_DAMAGE);
@@ -1012,6 +1136,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         vy: -52, text: `-${SHARK_ATTACK_DAMAGE}s O2`, life: 1.1, maxLife: 1.1,
       });
     }
+  }
   }
 
   const delivered = updateSpears(state.spears, state.player, dt, getReelSpeed(state.upgrades));
@@ -1030,14 +1155,19 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     if (fish.type === FishType.Large) {
       resolvedSpearIds.add(spearId);
       triggerTutorialHint(state, 'shark');
-      const prev = fish.hitPoints ?? SHARK_HIT_POINTS;
+      const sharkMaxHp = getSharkHitsToKill(state.upgrades.speargun);
+      const prev = fish.hitPoints ?? sharkMaxHp;
       const next = Math.max(0, prev - 1);
       fish.hitPoints = next;
       fish.hitFlash = 1.0;
 
       if (next > 0) {
+        fish.persistentShark = true;
         fish.sharkFleeTimer = SHARK_HIT_FLEE_SEC;
+        fish.sharkReattackTimer = 0;
         fish.age = 0;
+        fish.sharkAttackPhase = undefined;
+        fish.sharkChargeTimer = 0;
         setSharkFleeVelocity(fish, SHARK_FLEE_SPEED);
         emitHitParticles(state.particles, fish.x, fish.y, fish.type, rng, 0.65);
         returnSpearWithoutCatch(spear);
@@ -1045,7 +1175,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
           x: fish.x,
           y: fish.y - 34,
           vy: -52,
-          text: `SHARK ${SHARK_HIT_POINTS - next}/${SHARK_HIT_POINTS}`,
+          text: `SHARK ${sharkMaxHp - next}/${sharkMaxHp}`,
           life: 0.85,
           maxLife: 0.85,
           textScale: 1.08,
@@ -1055,6 +1185,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       }
 
       resolvedFishIds.add(fishId);
+      fish.persistentShark = false;
       fish.alive = false;
       const catchValue = Math.floor(
         getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
@@ -1130,7 +1261,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
     fish.alive = false;
     applyFtueShowcaseFleeAfterFirstCatch(state.fish, fish);
-    const catchValue = Math.floor(
+    const catchValue = fish.fixedCatchValue ?? Math.floor(
       getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
       * getHaulMultiplier(state.upgrades),
     );
@@ -1155,6 +1286,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     const totalReward = catchResult.value + comboBonus;
 
     if (catchResult.fishType === FishType.Treasure) {
+      const isFtueFirstTreasure = state.ftue.stage === 'firstTreasureCatch';
       state.treasureReveal = {
         elapsed: 0,
         opened: false,
@@ -1167,6 +1299,13 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         durationSec: TREASURE_REVEAL_DURATION_SEC,
         awardAtSec: TREASURE_REVEAL_AWARD_AT_SEC,
       };
+      if (isFtueFirstTreasure) {
+        state.ftue.stage = 'treasureUpgrade';
+        state.ftue.prompt = null;
+        state.fishSpawnTimer = 0.1;
+        state.treasureSpawnTimer = TREASURE_SPAWN_INTERVAL;
+        state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
+      }
       continue;
     }
 
@@ -1215,6 +1354,16 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       value: totalReward,
       fishType: catchResult.fishType,
     });
+    if (state.ftue.stage === 'sharkEncounter' && catchResult.fishType === FishType.Large) {
+      state.ftue.stage = 'firstTreasureIntro';
+      state.ftue.prompt = null;
+      state.ftueActive = false;
+      state.comboCount = 0;
+      state.comboTimer = 0;
+      state.ftue.treasureIntroTimer = 0;
+      state.fishSpawnTimer = 0.1;
+      state.treasureSpawnTimer = FTUE_TREASURE_SPAWN_DELAY_SEC;
+    }
   }
 
   state.fish = removeDespawnedFish(state.fish);
@@ -1249,7 +1398,7 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       updateDiving(state, dt);
       break;
     case GamePhase.Breaching:
-      updateBreaching(state, dt);
+      updateBreaching(state, dt, commands);
       break;
     case GamePhase.Action:
       updateAction(state, dt, commands);
@@ -1258,6 +1407,7 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
 
   updateTutorialHintTimer(state, dt);
   updateCatchCoinBursts(state, dt);
+  state.upgradeBackHighlightTimer = Math.max(0, state.upgradeBackHighlightTimer - dt);
 
   if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
     updateNetVfx(state, dt, getGameRng());
@@ -1275,118 +1425,6 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       state.sharkBiteTeethElapsed = -1;
     }
   }
-}
-
-function bubbleFadeInAlpha(b: { age: number }): number {
-  return Math.min(1, b.age / OCEAN_BUBBLE_FADE_IN_SEC);
-}
-
-function getBreachBoatRevealAlpha(state: FullGameState): number {
-  if (state.phase !== GamePhase.Breaching) return 0;
-  const t = state.breachTimer;
-  const F = OCEAN_TRANSITION_FADE_SEC;
-  const M = OCEAN_TRANSITION_MOVE_SEC;
-  const R = OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC;
-  if (t <= F + M) return 0;
-  return smooth01((t - F - M) / R);
-}
-
-function buildTransitionBackdropAlphas(state: FullGameState): { boat: number; underwater: number } | null {
-  if (state.phase === GamePhase.Diving) {
-    const t = state.diveTimer;
-    const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
-    const M = OCEAN_TRANSITION_MOVE_SEC;
-    if (t < P) {
-      return { boat: smooth01(t / P), underwater: 0 };
-    }
-    if (t < P + M) {
-      const rt = (t - P) / M;
-      if (rt < 0.5) return { boat: 1, underwater: 0 };
-      const u = smooth01((rt - 0.5) / 0.5);
-      return { boat: 1 - u, underwater: u };
-    }
-    return { boat: 0, underwater: 1 };
-  }
-  if (state.phase === GamePhase.Breaching) {
-    const t = state.breachTimer;
-    const F = OCEAN_TRANSITION_FADE_SEC;
-    const M = OCEAN_TRANSITION_MOVE_SEC;
-    if (t > F + M) return null;
-    if (t <= F) {
-      return { boat: 0, underwater: 1 };
-    }
-    const mt = (t - F) / M;
-    if (mt < 0.5) {
-      return { boat: 0, underwater: 1 };
-    }
-    const u = smooth01((mt - 0.5) / 0.5);
-    return { boat: u, underwater: 1 - u };
-  }
-  return null;
-}
-
-function buildOceanTransitionDraw(state: FullGameState): OceanTransitionDraw | null {
-  if (state.phase !== GamePhase.Diving && state.phase !== GamePhase.Breaching) return null;
-
-  const { surfaceDrawH, surfaceDrawW, scrollRange } = oceanSurfaceLayout();
-  const { yStart, yEnd } = diveParentYEndpoints();
-  const MOVE = OCEAN_TRANSITION_MOVE_SEC;
-  const FADE = OCEAN_TRANSITION_FADE_SEC;
-  const P = OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC;
-
-  let parentY: number;
-  let surfaceScrollX: number;
-  let groupAlpha: number;
-
-  if (state.phase === GamePhase.Diving) {
-    const t = state.diveTimer;
-    if (t < P) {
-      parentY = yStart;
-      surfaceScrollX = 0;
-      groupAlpha = 1;
-    } else if (t <= P + MOVE) {
-      const rt = (t - P) / MOVE;
-      const u = smooth01(rt);
-      parentY = yStart + (yEnd - yStart) * u;
-      surfaceScrollX = -scrollRange * rt;
-      groupAlpha = 1;
-    } else {
-      const uFade = (t - P - MOVE) / FADE;
-      parentY = yEnd;
-      surfaceScrollX = -scrollRange;
-      groupAlpha = 1 - easeOutCubic(smooth01(uFade));
-    }
-  } else {
-    const t = state.breachTimer;
-    if (t > FADE + MOVE) return null;
-    if (t <= FADE) {
-      parentY = yEnd;
-      surfaceScrollX = -scrollRange;
-      groupAlpha = 1;
-    } else {
-      const tm = t - FADE;
-      const u = smooth01(tm / MOVE);
-      parentY = yEnd + (yStart - yEnd) * u;
-      surfaceScrollX = -scrollRange * (1 - u);
-      groupAlpha = 1;
-    }
-  }
-
-  const bubbles = state.oceanBubbles.map((b) => ({
-    variant: b.variant,
-    lx: b.lx,
-    ly: b.ly,
-    alpha: bubbleFadeInAlpha(b),
-  }));
-
-  return {
-    parentY,
-    surfaceScrollX,
-    surfaceDrawH,
-    surfaceDrawW,
-    groupAlpha,
-    bubbles,
-  };
 }
 
 export function getRenderState(state: FullGameState): RenderState {
@@ -1413,6 +1451,8 @@ export function getRenderState(state: FullGameState): RenderState {
   return {
     phase: state.phase,
     ftueActive: ftue,
+    ftueStage: state.ftue.stage,
+    ftuePrompt: state.ftue.prompt,
     shakeX: state.shakeX,
     shakeY: state.shakeY,
     player: {
@@ -1457,11 +1497,17 @@ export function getRenderState(state: FullGameState): RenderState {
           && current.alive
           && current.age >= SHARK_AGGRO_DELAY
           && !current.hasAttacked
-          && (current.sharkFleeTimer ?? 0) <= 0;
+          && (current.sharkFleeTimer ?? 0) <= 0
+          && current.sharkAttackPhase === 'charging';
         const attackProgress = isAggressive
-          ? Math.min(1, (current.age - SHARK_AGGRO_DELAY) / SHARK_ATTACK_GROW_SEC)
+          ? Math.min(1, (current.sharkChargeTimer ?? 0) / SHARK_ATTACK_GROW_SEC)
           : 0;
-        const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? SHARK_HIT_POINTS) : undefined;
+        const sharkMaxHp = current.type === FishType.Large
+          ? state.ftue.stage === 'sharkEncounter'
+            ? 1
+            : getSharkHitsToKill(state.upgrades.speargun)
+          : undefined;
+        const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? sharkMaxHp) : undefined;
         return {
           x: current.x,
           y: current.y,
@@ -1474,9 +1520,25 @@ export function getRenderState(state: FullGameState): RenderState {
           attackProgress,
           isFleeing: current.type === FishType.Large && (current.sharkFleeTimer ?? 0) > 0,
           hitPoints: sharkHp,
-          maxHitPoints: current.type === FishType.Large ? SHARK_HIT_POINTS : undefined,
+          maxHitPoints: sharkMaxHp,
         };
       }),
+    ftueHandTarget: (() => {
+      if (
+        state.ftue.prompt !== 'tapFightBack'
+        && state.ftue.prompt !== 'treasureIntro'
+        && state.ftue.prompt !== 'catchTreasure'
+      ) return null;
+      const targetType = state.ftue.prompt === 'tapFightBack' ? FishType.Large : FishType.Treasure;
+      const target = state.fish.find((fish) => fish.alive && fish.type === targetType);
+      return target == null ? null : { x: target.x, y: target.y };
+    })(),
+    ftueTreasureZoom: state.ftue.prompt === 'treasureIntro'
+      ? getFtueTreasureZoom(state.ftue.treasureIntroTimer)
+      : 1,
+    ftueTreasureFocusBlend: state.ftue.prompt === 'treasureIntro'
+      ? getFtueTreasureFocusBlend(state.ftue.treasureIntroTimer)
+      : 0,
     particles: [...state.particles],
     floatingTexts: [...state.floatingTexts],
     catchCoinBursts: state.catchCoinBursts.map((burst) => ({ ...burst })),
@@ -1522,19 +1584,12 @@ export function getRenderState(state: FullGameState): RenderState {
     baitX: state.baitX,
     baitY: state.baitY,
     baitFraction: state.baitActive ? state.baitTimer / BAIT_DURATION : 0,
-    oceanTransition: buildOceanTransitionDraw(state),
-    transitionBackdrop: buildTransitionBackdropAlphas(state),
-    transitionUiAlpha: state.phase === GamePhase.Diving
-      ? Math.max(0, 1 - smooth01(state.diveTimer / 0.32))
-      : 1,
-    breachShowBoatRevealOnly:
-      state.phase === GamePhase.Breaching
-      && state.breachTimer >= OCEAN_TRANSITION_FADE_SEC + OCEAN_TRANSITION_MOVE_SEC,
-    breachBoatRevealAlpha: getBreachBoatRevealAlpha(state),
+    diveTransition: buildDiveTransitionDraw(state),
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,
     leaderboard: state.leaderboard,
+    upgradeBackHighlight: state.upgradeBackHighlightTimer > 0,
     catchFlash: state.catchFlash,
     sharkBiteFlash: state.sharkBiteFlash,
     sharkBiteTeethElapsed: state.sharkBiteTeethElapsed,

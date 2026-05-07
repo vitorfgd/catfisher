@@ -29,7 +29,7 @@ export const HUD_CONSUMABLE_BUTTON_Y = Math.min(
   HUD_TIME_STRIP_Y - HUD_CONSUMABLE_BUTTON_HIT_RADIUS - 10,
 );
 export const HUD_BAIT_BUTTON_CX = CANVAS_WIDTH - 37;
-export const HUD_NET_BUTTON_CX = CANVAS_WIDTH - 99;
+export const HUD_NET_BUTTON_CX = CANVAS_WIDTH - 121;
 
 export function getUpgradeButtonRect(index: number): { x: number; y: number; w: number; h: number } {
   return {

@@ -1,9 +1,21 @@
 // @GUARD: All tunable game values live here. Change values here to rebalance.
 
+import { DIVE_TRANSITION, GAME_TO_MENU_BREACH_TOTAL_SEC, MENU_TO_GAME_DIVE_TOTAL_SEC } from './diveTransitionConfig';
+
 export const CANVAS_WIDTH = 480;
 /** Logical portrait 9:20 (width : height). */
 export const CANVAS_HEIGHT = Math.round((CANVAS_WIDTH * 20) / 9);
 export const GAME_ASPECT_RATIO = CANVAS_WIDTH / CANVAS_HEIGHT;
+
+/** Matches `drawBoatBackgroundLayer` — diver cinematic anchors use UVs in this rect. */
+export const BOAT_BACKGROUND_ZOOM = 1.18;
+export const BOAT_BACKGROUND_DRAW_Y = -30;
+
+export function getBoatBackgroundDrawRect(): { x: number; y: number; w: number; h: number } {
+  const w = CANVAS_WIDTH * BOAT_BACKGROUND_ZOOM;
+  const h = CANVAS_HEIGHT * BOAT_BACKGROUND_ZOOM;
+  return { x: (CANVAS_WIDTH - w) / 2, y: BOAT_BACKGROUND_DRAW_Y, w, h };
+}
 
 /** Bottom bar: round timer + oxygen strip (logical px). */
 export const HUD_TIME_STRIP_HEIGHT = 50;
@@ -66,18 +78,18 @@ export const REELED_FISH_SCALE_END = 1.42;
 /** Fraction of a burst that uses off-screen spawns aimed inward (toward player), vs random edges */
 export const WAVE_NEAR_SPAWN_FRACTION = 0;
 export const RARE_FISH_MIN_SESSION_TIME = 6;
+/** Reserved first-person lane at the bottom: fish may not spawn or drift below this band. */
+export const FISH_BOTTOM_SAFE_ZONE_PX = 220;
 
-// Ocean dive / breach transition (durations scaled ~1.5× from original ~1.0–1.4s + preface / boat reveal)
-export const OCEAN_TRANSITION_MOVE_SEC = 1.29;
-export const OCEAN_TRANSITION_FADE_SEC = 0.51;
-/** Dive: boat backdrop fades in while the ocean strip is still at rest (before parent rises). */
-export const OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC = 0.21;
+// Ocean dive / breach transition — derived from `DIVE_TRANSITION` (see diveTransitionConfig.ts).
+export const OCEAN_TRANSITION_MOVE_SEC = DIVE_TRANSITION.waterlineRiseDuration;
+export const OCEAN_TRANSITION_FADE_SEC = DIVE_TRANSITION.waterlineFadeOutDuration;
+/** @deprecated Stages are driven by `diveTransitionController`; kept as `0` for any stale references. */
+export const OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC = 0;
 /** Breach: fade full boat screen in before switching to `Boat` phase (replaces transition boat layer). */
-export const OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC = 0.33;
-export const OCEAN_DIVE_TOTAL_SEC =
-  OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC + OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_FADE_SEC;
-export const OCEAN_BREACH_TOTAL_SEC =
-  OCEAN_TRANSITION_FADE_SEC + OCEAN_TRANSITION_MOVE_SEC + OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC;
+export const OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC = DIVE_TRANSITION.breachBoatRevealDuration;
+export const OCEAN_DIVE_TOTAL_SEC = MENU_TO_GAME_DIVE_TOTAL_SEC;
+export const OCEAN_BREACH_TOTAL_SEC = GAME_TO_MENU_BREACH_TOTAL_SEC;
 /** Spawn ~8 bubbles at this fraction through the move segment (dive and breach). */
 export const OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE = 0.33;
 export const OCEAN_TRANSITION_BUBBLE_COUNT = 8;
@@ -154,11 +166,17 @@ export const SHARK_AGGRO_DELAY   = 1.8;  // seconds alive before shark can attac
 export const SHARK_ATTACK_DAMAGE = 7;    // time (seconds) lost per bite
 export const SHARK_ATTACK_CHARGE_SPEED = 285; // px/s toward the first-person anchor
 export const SHARK_ATTACK_GROW_SEC = 2.35;    // visual charge scale-up duration
+export const SHARK_ATTACK_STAGE_MARGIN_X = 92;
+export const SHARK_ATTACK_STAGE_MIN_Y_FRAC = 0.24;
+export const SHARK_ATTACK_STAGE_MAX_Y_FRAC = 0.52;
+export const SHARK_ATTACK_STAGE_SPEED = 230;
 export const SHARK_BITE_FLASH_DECAY = 4.8;    // red overlay fade speed after a bite
 export const SHARK_HIT_POINTS = 3;
-export const SHARK_HIT_FLEE_SEC = 1.45;
+export const SHARK_HIT_FLEE_SEC = 2.2;
+export const SHARK_REATTACK_WAIT_MIN_SEC = 0.8;
+export const SHARK_REATTACK_WAIT_MAX_SEC = 2.2;
 export const SHARK_BITE_FLEE_SEC = 2.2;
-export const SHARK_FLEE_SPEED = 360;
+export const SHARK_FLEE_SPEED = 520;
 export const OXYGEN_DAMAGE_VFX_SEC = 1.15;
 /** Full-screen teeth VFX when a shark bite lands (`elapsed` in game state; -1 = idle). */
 export const SHARK_BITE_VFX_TOTAL_SEC = 1.12;
@@ -242,7 +260,7 @@ export const BOAT_MENU_DIVE_BUTTON_INNER_PAD_X = 8;
 export const UPGRADE_BUTTON_H = 88;
 export const UPGRADE_BUTTON_GAP = 10;
 /** Extra px to push the upgrade/gear block down (tweak one number instead of retuning formulas). */
-export const BOAT_UPGRADES_VERTICAL_NUDGE_PX = 204;
+export const BOAT_UPGRADES_VERTICAL_NUDGE_PX = 233;
 /**
  * First upgrade row Y — scaled for 9:20 + `BOAT_UPGRADES_VERTICAL_NUDGE_PX`.
  * Legacy reference height 854 = old 9:16 logical canvas.
@@ -264,7 +282,7 @@ export const GEAR_SECTION_HEADER_H = SECTION_HEADER_BLOCK_H;
 /** Gap from UPGRADES header top to first upgrade row. */
 export const UPGRADE_SECTION_HEADER_GAP = 10;
 /** Space from last upgrade row to GEAR title (+20 vs legacy for spacing between section plates). */
-export const MARGIN_UPGRADES_TO_GEAR = 34;
+export const MARGIN_UPGRADES_TO_GEAR = 37;
 /** Space from GEAR header rule to top of consumable cards. */
 export const MARGIN_GEAR_TO_CONSUMABLE = 5;
 export const GEAR_HEADER_LABEL_Y = UPGRADE_LAST_ROW_BOTTOM + MARGIN_UPGRADES_TO_GEAR;
@@ -277,7 +295,7 @@ export const CONSUMABLE_Y =
 export const UPGRADE_PANEL_BUY_Y = CANVAS_HEIGHT - 120;
 export const UPGRADE_PANEL_BUY_H = 60;
 /** Gap between the top GO FISH card and the upgrades header. */
-export const DIVE_BUTTON_GAP = 40;
+export const DIVE_BUTTON_GAP = 70;
 export const BOAT_DECK_TOP_PAD = 20; // PANEL top → UPGRADES label; keep equal to DIVE_BUTTON_GAP
 /** Padding below DIVE inside the deck shell (visual breathing room). */
 export const BOAT_SHELL_BELOW_DIVE = 18;

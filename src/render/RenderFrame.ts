@@ -19,10 +19,15 @@ import {
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
-import { drawBoatBackgroundLayer, drawBoatMenuUi, drawBoatScreen } from './boatScreen';
-import { drawOceanTransition, type OceanTransitionDraw } from './oceanTransition';
+import { drawBoatScreen } from './boatScreen';
+import {
+  drawDiveBackdropWipe,
+  drawDiveMaskedBackdrops,
+  drawDiveTransitionFull,
+  drawDiveWaterlineVfx,
+} from './diveTransition';
 import { drawHud, getHudMoneyLayout } from './hud';
-import { C, t, td, tb } from './theme';
+import { Boat, C, t, td, tb } from './theme';
 import { actionViewFocus, actionWorldToCanvas, getActionViewZoomForSession } from '../core/ActionViewTransform';
 import { getHarpoonMuzzleWorldFromGrip } from '../core/SpearSystem';
 
@@ -72,61 +77,17 @@ const FISH_ASPECT_RATIO: Record<FishType, number> = {
   [FishType.Clown]: 1.45,
 };
 
+const SHARK_Y_SCALE_MIN = 0.72;
+const SHARK_Y_SCALE_MAX = 1.35;
+
+function sharkYPositionScale(y: number): number {
+  const t = Math.min(1, Math.max(0, y / CANVAS_HEIGHT));
+  const u = t * t * (3 - 2 * t);
+  return SHARK_Y_SCALE_MIN + (SHARK_Y_SCALE_MAX - SHARK_Y_SCALE_MIN) * u;
+}
+
 function drawBackground(renderer: GameRenderer): void {
   renderer.drawImage({ id: AssetIds.underwaterBg }, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-}
-
-/** Horizontal seam in screen space: boat-bg only for y < splitY, underwater only for y > splitY. */
-function dualBackdropSplitY(ocean: OceanTransitionDraw | null | undefined): number | null {
-  if (ocean == null) return null;
-  const y = ocean.parentY + ocean.surfaceDrawH * 0.5;
-  return Math.max(0, Math.min(CANVAS_HEIGHT, y));
-}
-
-function drawDualSceneBackdrop(
-  renderer: GameRenderer,
-  backdrop: { boat: number; underwater: number },
-  ocean: OceanTransitionDraw | null | undefined,
-): void {
-  const splitY = dualBackdropSplitY(ocean);
-  const W = CANVAS_WIDTH;
-  const H = CANVAS_HEIGHT;
-
-  if (splitY == null) {
-    if (backdrop.underwater > 0.002) {
-      renderer.drawImageAlpha(
-        { id: AssetIds.underwaterBg },
-        0,
-        0,
-        W,
-        H,
-        backdrop.underwater,
-      );
-    }
-    drawBoatBackgroundLayer(renderer, backdrop.boat);
-    return;
-  }
-
-  const belowH = H - splitY;
-  if (backdrop.underwater > 0.002 && belowH > 0.5) {
-    renderer.pushClipRect(0, splitY, W, belowH);
-    renderer.drawImageAlpha(
-      { id: AssetIds.underwaterBg },
-      0,
-      0,
-      W,
-      H,
-      backdrop.underwater,
-    );
-    renderer.popClip();
-  }
-
-  const aboveH = splitY;
-  if (backdrop.boat > 0.002 && aboveH > 0.5) {
-    renderer.pushClipRect(0, 0, W, aboveH);
-    drawBoatBackgroundLayer(renderer, backdrop.boat);
-    renderer.popClip();
-  }
 }
 
 function drawFishSprite(
@@ -144,7 +105,8 @@ function drawFishSprite(
   const attackRefId = isAggressive ? FISH_ATTACK_IMAGE_IDS[type] : undefined;
   const attackGrow = attackRefId != null ? attackProgress * attackProgress * attackProgress : 0;
   const attackScale = attackRefId != null ? 0.86 + attackGrow * 1.36 : 1;
-  const w = FISH_DRAW_WIDTH[type] * scale * attackScale;
+  const yScale = attackRefId != null ? sharkYPositionScale(y) : 1;
+  const w = FISH_DRAW_WIDTH[type] * scale * yScale * attackScale;
   const h = w / (attackRefId != null ? 1 : FISH_ASPECT_RATIO[type]);
   const ref = { id: attackRefId ?? FISH_IMAGE_IDS[type] };
   const now = Date.now();
@@ -222,6 +184,7 @@ function drawFishSprite(
 }
 
 function drawFish(renderer: GameRenderer, fish: RenderFishState): void {
+  const scale = fish.drawScale ?? 1;
   drawFishSprite(
     renderer,
     fish.x,
@@ -231,14 +194,19 @@ function drawFish(renderer: GameRenderer, fish: RenderFishState): void {
     fish.hitFlash,
     fish.rotation,
     fish.isAggressive,
-    fish.drawScale ?? 1,
+    scale,
     fish.attackProgress,
   );
   if (fish.type === FishType.Large && fish.maxHitPoints != null && fish.hitPoints != null) {
+    const attackGrow = fish.isAggressive ? fish.attackProgress * fish.attackProgress * fish.attackProgress : 0;
+    const attackScale = fish.isAggressive ? 0.86 + attackGrow * 1.36 : 1;
+    const yScale = fish.isAggressive ? sharkYPositionScale(fish.y) : 1;
+    const fishW = FISH_DRAW_WIDTH[fish.type] * scale * yScale * attackScale;
+    const fishH = fishW / (fish.isAggressive ? 1 : FISH_ASPECT_RATIO[fish.type]);
     const hpW = 86;
     const hpH = 8;
     const hpX = fish.x - hpW / 2;
-    const hpY = fish.y + 46;
+    const hpY = fish.y + fishH * 0.5 + 14;
     const frac = Math.max(0, Math.min(1, fish.hitPoints / fish.maxHitPoints));
     renderer.drawRoundRectAlpha(C.bg, 0.82, hpX - 3, hpY - 3, hpW + 6, hpH + 6, 7);
     renderer.drawRoundRect(C.danger, hpX, hpY, Math.max(8, hpW * frac), hpH, 4);
@@ -344,7 +312,9 @@ function ftueClickPressT(): number {
 const FTUE_CLICK_DIP_PX = 9;
 
 function drawFtueHandWorld(renderer: GameRenderer, state: RenderState): void {
-  const target = state.fish[0];
+  const target = state.ftuePrompt === 'catchTreasure'
+    ? state.fish.find((fish) => fish.type === FishType.Treasure)
+    : state.fish[0];
   if (target == null) return;
   const s = target.drawScale ?? 1;
   const fishW = FISH_DRAW_WIDTH[target.type] * s;
@@ -368,32 +338,57 @@ function drawFtueHandWorld(renderer: GameRenderer, state: RenderState): void {
  * FTUE: primary copy anchored to the **bottom** of the screen (reels / thumb zone).
  * Soft fade from transparent so it doesn’t read as a top bar.
  */
-function drawFtueCtaOnly(renderer: GameRenderer): void {
-  const H = CANVAS_HEIGHT;
-  const W = CANVAS_WIDTH;
-  const bottomPad = 24;
-  const subH = 40;
-  const subY = H - bottomPad - subH;
-  const headH = 56;
-  const headGap = 8;
-  const headY = subY - headGap - headH;
-  const bandH = 200;
-  renderer.drawGradientRect('rgba(1,3,6,0)', 'rgba(1,3,6,0.52)', 0, H - bandH, W, bandH);
-  renderer.drawText('CATCH FISH · CASH IN', 0, headY, W, headH, td(42, C.white, 'center'));
-  renderer.drawText('One tap, full run. Get paid on every catch.', 0, subY, W, subH, t(15, C.teal, 'center', '800'));
+function getFtueCtaCopy(state: RenderState): { title: string; body: string } {
+  if (state.ftuePrompt === 'tapFightBack') {
+    return {
+      title: 'TAP TO FIGHT BACK',
+      body: 'FINISH OFF THE SHARK!',
+    };
+  }
+  if (state.ftuePrompt === 'treasureIntro') {
+    return {
+      title: 'TREASURE',
+      body: 'TAP',
+    };
+  }
+  if (state.ftuePrompt === 'catchTreasure') {
+    return {
+      title: 'HOOK THE TREASURE',
+      body: '',
+    };
+  }
+  if (state.ftuePrompt === 'useConsumables') {
+    return {
+      title: 'USE YOUR FREE GEAR',
+      body: 'Tap bait and net to try each consumable.',
+    };
+  }
+  return {
+    title: 'CATCH FISH · CASH IN',
+    body: 'One tap, full run. Get paid on every catch.',
+  };
 }
 
-function drawTutorialHintPanel(renderer: GameRenderer, state: RenderState): void {
-  const hint = state.tutorialHint;
-  if (hint == null || state.ftueActive) return;
-  const w = 360;
-  const h = 86;
-  const x = (CANVAS_WIDTH - w) / 2;
-  const y = state.phase === GamePhase.Boat ? 126 : 74;
-  renderer.drawRoundRectAlpha(C.bg, 0.90, x, y, w, h, 18);
-  renderer.drawRoundRectAlpha(C.teal, 0.12, x + 3, y + 3, w - 6, h - 6, 15);
-  renderer.drawText(hint.title.toUpperCase(), x + 16, y + 12, w - 32, 24, t(17, C.teal, 'left', '800'));
-  renderer.drawText(hint.body, x + 16, y + 40, w - 32, 34, t(14, C.white, 'left', '700'));
+function drawFtueCtaOnly(renderer: GameRenderer, state: RenderState): void {
+  const H = CANVAS_HEIGHT;
+  const W = CANVAS_WIDTH;
+  const copy = getFtueCtaCopy(state);
+  const isFightBack = state.ftuePrompt === 'tapFightBack';
+  const useFightBackPlacement = isFightBack
+    || state.ftuePrompt === 'catchTreasure'
+    || state.ftuePrompt === 'useConsumables';
+  const isTreasure = state.ftuePrompt === 'treasureIntro' || state.ftuePrompt === 'catchTreasure';
+  const bottomPad = useFightBackPlacement ? 210 : 24;
+  const subH = useFightBackPlacement ? 52 : 40;
+  const subY = H - bottomPad - subH;
+  const headH = useFightBackPlacement ? 62 : 56;
+  const headGap = useFightBackPlacement ? 4 : 8;
+  const headY = subY - headGap - headH;
+  const bandH = useFightBackPlacement ? 300 : 200;
+  const bodyStyle = isFightBack ? tb(30, C.teal, 'center') : t(isTreasure ? 22 : 15, C.teal, 'center', '800');
+  renderer.drawGradientRect('rgba(1,3,6,0)', 'rgba(1,3,6,0.52)', 0, H - bandH, W, bandH);
+  renderer.drawText(copy.title, 0, headY, W, headH, td(isTreasure ? 46 : 42, C.white, 'center'));
+  if (copy.body !== '') renderer.drawText(copy.body, 0, subY, W, subH, bodyStyle);
 }
 
 /**
@@ -612,33 +607,51 @@ function drawFirstPersonHarpoonGun(
   renderer.pop();
 }
 
-function drawDiverCharacter(renderer: GameRenderer): void {
-  const naturalW = 1000;
-  const naturalH = 320;
-  const drawW = 500;
+function drawDiverCharacter(renderer: GameRenderer, yOffset = 0): void {
+  const naturalW = 1024;
+  const naturalH = 532;
+  const drawW = 360;
   const drawH = (drawW * naturalH) / naturalW;
-  const x = CANVAS_WIDTH * 0.5 - drawW * 0.5 - 34;
-  const y = CANVAS_HEIGHT - drawH + 22;
+  const x = CANVAS_WIDTH * 0.5 - drawW * 0.5 - 70;
+  const y = CANVAS_HEIGHT - drawH + 22 + yOffset;
   renderer.drawImage({ id: AssetIds.helmet }, x, y, drawW, drawH);
 }
 
 function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState): void {
   const actionZoomed = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
   const isFtue = state.phase === GamePhase.Action && state.ftueActive;
-  const zf = actionZoomed ? actionViewFocus(state.player.x, state.player.y) : null;
-  const z = getActionViewZoomForSession(state.actionSessionTime, state.ftueActive);
+  const treasureFocus = state.ftuePrompt === 'treasureIntro' ? state.ftueHandTarget : null;
+  const playerFocus = actionViewFocus(state.player.x, state.player.y);
+  const focusBlend = treasureFocus == null ? 0 : state.ftueTreasureFocusBlend;
+  const activeFocus = treasureFocus == null
+    ? playerFocus
+    : {
+      x: playerFocus.x + (treasureFocus.x - playerFocus.x) * focusBlend,
+      y: playerFocus.y + (treasureFocus.y - playerFocus.y) * focusBlend,
+    };
+  const zf = actionZoomed
+    ? activeFocus
+    : null;
+  const baseActionZoom = getActionViewZoomForSession(state.actionSessionTime, state.ftueActive);
+  const z =
+    baseActionZoom
+    * state.ftueTreasureZoom
+    * (state.phase === GamePhase.Breaching ? (state.diveTransition?.breachCameraZoom ?? 1) : 1);
+  const breachExitOffset = state.phase === GamePhase.Breaching
+    ? (state.diveTransition?.breachPlayerExitOffset ?? 0)
+    : 0;
 
   renderer.pushTranslate(state.shakeX, state.shakeY);
   if (actionZoomed && zf) {
     renderer.pushScale(z, z, zf.x, zf.y);
   }
 
-  const useBaseUnderwaterOnly =
-    state.phase === GamePhase.Breaching && state.transitionBackdrop != null;
+  const dive = state.diveTransition;
+  const useBaseUnderwaterOnly = state.phase === GamePhase.Breaching && dive?.backdrop != null;
   if (useBaseUnderwaterOnly) {
     drawBackground(renderer);
-  } else if (state.transitionBackdrop != null) {
-    drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+  } else if (dive?.backdrop != null) {
+    drawDiveMaskedBackdrops(renderer, dive);
   } else {
     drawBackground(renderer);
   }
@@ -672,7 +685,7 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   for (const fish of state.fish) {
     if (fish.type !== FishType.Boss) drawFish(renderer, fish);
   }
-  if (isFtue) {
+  if (isFtue || state.ftuePrompt === 'catchTreasure') {
     drawFtueHandWorld(renderer, state);
   }
 
@@ -681,7 +694,7 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   let gunSlide = 0;
   if (actionZoomed) {
     gunSlide = harpoonGunSlidePixels(state.harpoonGunAnimElapsed);
-    const gripY = state.player.y + gunSlide;
+    const gripY = state.player.y + gunSlide + breachExitOffset;
     const muzzleW = getHarpoonMuzzleWorldFromGrip(
       state.player.x,
       gripY,
@@ -700,11 +713,11 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   }
   for (const spear of state.spears) drawSpearTether(renderer, tetherMuzzleX, tetherMuzzleY, spear);
   if (actionZoomed) {
-    drawFirstPersonHarpoonGun(renderer, state, gunSlide);
+    drawFirstPersonHarpoonGun(renderer, state, gunSlide + breachExitOffset);
   }
   for (const spear of state.spears) drawSpearBody(renderer, spear);
   if (actionZoomed) {
-    drawDiverCharacter(renderer);
+    drawDiverCharacter(renderer, breachExitOffset);
   }
   drawParticles(renderer, state.particles);
   drawFloatingTexts(renderer, state.floatingTexts);
@@ -827,9 +840,46 @@ function drawSharkBiteTeeth(renderer: GameRenderer, elapsed: number): void {
   renderer.popOpacity();
 }
 
+function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState, alpha: number): void {
+  if (alpha <= 0.004) return;
+
+  const w = CANVAS_WIDTH - 72;
+  const h = 470;
+  const x = (CANVAS_WIDTH - w) / 2;
+  const y = (CANVAS_HEIGHT - h) / 2;
+  renderer.pushOpacity(alpha);
+  renderer.drawRectAlpha(C.bg, 0.52, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+  renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
+  renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);
+  renderer.drawText('DIVE COMPLETE', x, y + 24, w, 30, t(17, C.muted, 'center', '800'));
+  renderer.drawText(`${state.sessionCatchCount} FISH CAUGHT`, x, y + 58, w, 44, tb(31, C.gold, 'center'));
+  renderer.drawText(`+$${state.sessionEarnings}`, x, y + 100, w, 32, tb(23, C.white, 'center'));
+
+  const listY = y + 176;
+  renderer.drawText('LEADERBOARD', x + 24, listY - 34, w - 48, 24, t(17, C.teal, 'left', '800'));
+  const rows = state.leaderboard.entries
+    .map((entry) => entry.isPlayer
+      ? { ...entry, fishCaught: Math.max(entry.fishCaught, state.sessionCatchCount) }
+      : entry)
+    .sort((a, b) => b.fishCaught - a.fishCaught)
+    .map((entry, index) => ({ ...entry, rank: index + 1 }))
+    .slice(0, 5);
+  for (let i = 0; i < rows.length; i += 1) {
+    const entry = rows[i]!;
+    const rowY = listY + i * 42;
+    const isPlayer = entry.isPlayer;
+    renderer.drawRoundRectAlpha(isPlayer ? C.gold : C.border, isPlayer ? 0.18 : 0.22, x + 22, rowY, w - 44, 34, 11);
+    renderer.drawText(`#${entry.rank}`, x + 36, rowY + 4, 48, 26, tb(16, isPlayer ? C.gold : C.muted, 'left'));
+    renderer.drawText(entry.name, x + 92, rowY + 4, 170, 26, t(17, C.white, 'left', '800'));
+    renderer.drawText(`${entry.fishCaught}`, x + w - 94, rowY + 4, 58, 26, tb(18, isPlayer ? C.gold : C.white, 'right'));
+  }
+  renderer.drawText('Tap anywhere to continue', x, y + h - 50, w, 24, t(16, C.muted, 'center', '800'));
+  renderer.popOpacity();
+}
+
 function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): void {
   const isBreach = state.phase === GamePhase.Breaching;
-  const dualOverHud = isBreach && state.transitionBackdrop != null;
+  const dualOverHud = isBreach && state.diveTransition?.backdrop != null;
   const actionOrBreach = state.phase === GamePhase.Action || isBreach;
 
   if (actionOrBreach && state.catchFlash > 0 && !dualOverHud) {
@@ -838,16 +888,22 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
   if ((state.phase === GamePhase.Action && !state.ftueActive) || isBreach) {
     drawHud(renderer, state);
   }
-  if (dualOverHud && state.transitionBackdrop != null) {
-    drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
+  if (dualOverHud && state.diveTransition != null) {
+    drawDiveBackdropWipe(renderer, state.diveTransition);
   }
   if (actionOrBreach && state.catchFlash > 0 && dualOverHud) {
     drawCatchFlashOverlay(renderer, state);
   }
-  if (state.phase === GamePhase.Action && state.ftueActive) {
-    drawFtueCtaOnly(renderer);
+  if (
+    state.phase === GamePhase.Action
+    && (
+      state.ftueActive
+      || state.ftuePrompt === 'catchTreasure'
+      || state.ftuePrompt === 'useConsumables'
+    )
+  ) {
+    drawFtueCtaOnly(renderer, state);
   }
-  drawTutorialHintPanel(renderer, state);
   if (actionOrBreach && state.sharkBiteFlash > 0 && !dualOverHud) {
     drawSharkBiteFlashOverlay(renderer, state);
   }
@@ -873,23 +929,12 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
 
   if (state.phase === GamePhase.Diving) {
-    drawBoatBackgroundLayer(renderer);
-    if (state.transitionBackdrop != null) {
-      drawDualSceneBackdrop(renderer, state.transitionBackdrop, state.oceanTransition);
-    }
-    if (state.transitionUiAlpha > 0.002) {
-      renderer.pushOpacity(state.transitionUiAlpha);
-      drawBoatMenuUi(renderer, state);
-      renderer.popOpacity();
-    }
-    if (state.oceanTransition != null) {
-      drawOceanTransition(renderer, state.oceanTransition);
-    }
+    drawDiveTransitionFull(renderer, state);
     return;
   }
 
-  if (state.phase === GamePhase.Breaching && state.breachShowBoatRevealOnly) {
-    const a = state.breachBoatRevealAlpha;
+  if (state.phase === GamePhase.Breaching && state.diveTransition?.breachShowBoatRevealOnly) {
+    const a = state.diveTransition.breachBoatRevealAlpha;
     if (a < 0.999) renderer.pushOpacity(a);
     drawBoatScreen(renderer, state);
     if (a < 0.999) renderer.popOpacity();
@@ -906,9 +951,26 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   /*if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
     drawThirdPersonHelmetOverlay(renderer);
   }*/
-  drawActionSurfaceOverlays(renderer, state);
+  const breachUiAlpha = state.phase === GamePhase.Breaching
+    ? (state.diveTransition?.breachUiAlpha ?? 1)
+    : 1;
+  if (breachUiAlpha > 0.002) {
+    if (breachUiAlpha < 0.999) renderer.pushOpacity(breachUiAlpha);
+    drawActionSurfaceOverlays(renderer, state);
+    if (breachUiAlpha < 0.999) renderer.popOpacity();
+  }
 
-  if (state.phase === GamePhase.Breaching && state.oceanTransition != null) {
-    drawOceanTransition(renderer, state.oceanTransition);
+  if (state.phase === GamePhase.Breaching && state.diveTransition != null) {
+    // The wipe backdrop must not be tied to HUD opacity; once the waterline moves,
+    // the boat background should already be visible beneath it.
+    drawDiveBackdropWipe(renderer, state.diveTransition);
+    drawBreachLeaderboardOverlay(renderer, state, state.diveTransition.breachLeaderboardAlpha);
+    const a = state.diveTransition.breachBoatRevealAlpha;
+    if (a > 0.002) {
+      if (a < 0.999) renderer.pushOpacity(a);
+      drawBoatScreen(renderer, state);
+      if (a < 0.999) renderer.popOpacity();
+    }
+    drawDiveWaterlineVfx(renderer, state.diveTransition);
   }
 }

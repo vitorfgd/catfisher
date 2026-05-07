@@ -13,6 +13,8 @@ export interface OceanBubbleParticle {
   ly: number;
   variant: number;
   age: number;
+  /** Horizontal drift in parent-local space (px/s). */
+  vx?: number;
 }
 
 export enum FishType {
@@ -44,6 +46,31 @@ export interface UpgradeState {
 export interface ConsumableState {
   net: number;   // units in stock
   bait: number;  // units in stock
+}
+
+export type FtueStage =
+  | 'none'
+  | 'sharkEncounter'
+  | 'firstTreasureIntro'
+  | 'firstTreasureCatch'
+  | 'treasureUpgrade'
+  | 'secondDiveConsumables'
+  | 'complete';
+
+export type FtuePromptId =
+  | 'tapFightBack'
+  | 'treasureIntro'
+  | 'catchTreasure'
+  | 'upgradeHarpoon'
+  | 'useConsumables';
+
+export interface FtueRuntimeState {
+  stage: FtueStage;
+  prompt: FtuePromptId | null;
+  treasureIntroTimer: number;
+  freeConsumablesGranted: boolean;
+  usedNet: boolean;
+  usedBait: boolean;
 }
 
 export interface PlayerState {
@@ -82,6 +109,8 @@ export interface FishState {
   type: FishType;
   alive: boolean;
   hitFlash: number;
+  /** Optional exact payout, used by scripted FTUE treasure. */
+  fixedCatchValue?: number;
   /** Visual + hitbox scale; omitted = 1. Used for FTUE showcase fish. */
   drawScale?: number;
   /** The three first-dive tutorial fish — when one is caught, the rest panic-flee. */
@@ -92,6 +121,14 @@ export interface FishState {
   hitPoints?: number;
   /** Shark only — brief retreat after hit/bite before it can charge again. */
   sharkFleeTimer?: number;
+  /** Shark only — move on-screen before switching to the attack sprite/charge. */
+  sharkAttackPhase?: 'staging' | 'charging';
+  /** Shark only — seconds spent in the visible charge phase. */
+  sharkChargeTimer?: number;
+  /** Shark only — random cooldown after retreat before re-staging. */
+  sharkReattackTimer?: number;
+  /** Shark only — keep wounded shark instance alive while it retreats/waits offscreen. */
+  persistentShark?: boolean;
 }
 
 export interface ParticleState {
@@ -137,6 +174,8 @@ export type GameEvent =
   | { type: 'fishCaught'; x: number; y: number; value: number; fishType: FishType }
   | { type: 'spearFired' }
   | { type: 'diveStarted' }
+  /** Menu→game cinematic: diver leaves the deck (synth SFX). */
+  | { type: 'diverJumped' }
   | { type: 'runEnded'; earnings: number; runDurationSec: number; catchCount: number }
   | { type: 'upgradeBought'; id: string }
   | { type: 'ftueDiveExited' }
@@ -260,12 +299,23 @@ export interface FullGameState {
   oceanBubbles: OceanBubbleParticle[];
   /** True after bubbles spawned for the current transition move segment. */
   oceanBubblesSpawned: boolean;
+  /** Menu→game: ensures `diverJumped` fires once per dive. */
+  diveJumpSfxPlayed: boolean;
+  /** Game→menu: player tapped to close the interstitial leaderboard. */
+  breachLeaderboardDismissed: boolean;
+  /** Game→menu: fade timer after leaderboard dismissal. */
+  breachLeaderboardFadeElapsed: number;
+  /** Boat upgrade panel: briefly highlights Back after a successful upgrade. */
+  upgradeBackHighlightTimer: number;
 
   // Event queue (drained each frame by platform layer)
   pendingEvents: GameEvent[];
 
   /** Non-blocking contextual hints; persisted by platform storage. */
   tutorial: TutorialRuntimeState;
+
+  /** Scripted first-time user experience progression. */
+  ftue: FtueRuntimeState;
 
   /** Platform-owned leaderboard snapshot shown on the boat. */
   leaderboard: LeaderboardState;

@@ -48,6 +48,8 @@ export const BrowserAssetManifest = {
     [AssetIds.vfxTeethClamped]: 'assets/vfx-teeth-clamped.png',
     [AssetIds.vfxNet]: 'assets/vfx-net.png',
     [AssetIds.helmet]: 'assets/helmet.png',
+    [AssetIds.diverStand]: 'assets/diver_stand.png',
+    [AssetIds.diverJump]: 'assets/diver_jump.png',
     [AssetIds.gun1]: 'assets/gun_1.png',
   },
   sounds: {} as Record<string, string>,

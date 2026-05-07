@@ -14,6 +14,7 @@ import {
   FISH_SPAWN_WEIGHTS,
   FISH_VALUE_MAX,
   FISH_VALUE_MIN,
+  FISH_BOTTOM_SAFE_ZONE_PX,
   FISH_Y_MAX_FRAC,
   FISH_Y_MIN_FRAC,
   BAIT_ATTRACT,
@@ -33,7 +34,10 @@ import {
 } from './Constants';
 
 const Y_MIN = CANVAS_HEIGHT * FISH_Y_MIN_FRAC;
-const Y_MAX = CANVAS_HEIGHT * FISH_Y_MAX_FRAC;
+const Y_MAX = Math.min(
+  CANVAS_HEIGHT * FISH_Y_MAX_FRAC,
+  CANVAS_HEIGHT - FISH_BOTTOM_SAFE_ZONE_PX,
+);
 const Y_SOFT_MIN = Y_MIN - 20;
 const Y_SOFT_MAX = Y_MAX + 20;
 
@@ -45,35 +49,29 @@ function spawnInwardFromEdge(
   speed: number,
 ): { x: number; y: number; vx: number; vy: number } {
   const r = rng.next();
+  const safeTargetY = Math.max(Y_MIN, Math.min(Y_MAX, targetY));
   let x: number, y: number;
-  if (r < 0.38) {
+  if (r < 0.44) {
     x = -FISH_OFFSCREEN_MARGIN;
     y = rng.between(
-      Math.max(Y_MIN, targetY - 110),
-      Math.min(Y_MAX, targetY + 110),
-    );
-  } else if (r < 0.76) {
-    x = CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN;
-    y = rng.between(
-      Math.max(Y_MIN, targetY - 110),
-      Math.min(Y_MAX, targetY + 110),
+      Math.max(Y_MIN, safeTargetY - 110),
+      Math.min(Y_MAX, safeTargetY + 110),
     );
   } else if (r < 0.88) {
-    y = Y_MIN - FISH_OFFSCREEN_MARGIN;
-    x = rng.between(
-      Math.max(-FISH_OFFSCREEN_MARGIN, targetX - 100),
-      Math.min(CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN, targetX + 100),
+    x = CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN;
+    y = rng.between(
+      Math.max(Y_MIN, safeTargetY - 110),
+      Math.min(Y_MAX, safeTargetY + 110),
     );
   } else {
-    // Below the canvas — Y_MAX is only the fish play band, not the screen bottom
-    y = CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
+    y = Y_MIN - FISH_OFFSCREEN_MARGIN;
     x = rng.between(
       Math.max(-FISH_OFFSCREEN_MARGIN, targetX - 100),
       Math.min(CANVAS_WIDTH + FISH_OFFSCREEN_MARGIN, targetX + 100),
     );
   }
   const dx = targetX - x;
-  const dy = targetY - y;
+  const dy = safeTargetY - y;
   const len = Math.hypot(dx, dy) || 1;
   return { x, y, vx: (dx / len) * speed, vy: (dy / len) * speed };
 }
@@ -103,26 +101,24 @@ export function spawnFish(
   if (type === FishType.Jelly) {
     if (spawnInward) {
       const tgx = PLAYER_X + (rng.next() - 0.5) * 90;
-      const tgy = PLAYER_Y + (rng.next() - 0.5) * 100;
-      const fromTop = rng.next() < 0.5;
+      const tgy = Math.min(Y_MAX - 40, PLAYER_Y + (rng.next() - 0.5) * 100);
       x = Math.max(32, Math.min(CANVAS_WIDTH - 32, tgx + (rng.next() - 0.5) * 70));
-      y = fromTop ? (Y_MIN - FISH_OFFSCREEN_MARGIN) : (CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN);
+      y = Y_MIN - FISH_OFFSCREEN_MARGIN;
       const dx = tgx - x;
       const dy = tgy - y;
       const len = Math.hypot(dx, dy) || 1;
       vx = (dx / len) * speed * 0.32;
       vy = (dy / len) * speed * 0.42;
     } else {
-      // Jellyfish: spawn top/bottom, drift vertically with slow horizontal wobble
-      const fromTop = rng.next() < 0.65;
+      // Jellyfish only enter from above; the bottom lane stays clear.
       x = rng.between(CANVAS_WIDTH * 0.1, CANVAS_WIDTH * 0.9);
-      y = fromTop ? Y_MIN - FISH_OFFSCREEN_MARGIN : CANVAS_HEIGHT + FISH_OFFSCREEN_MARGIN;
+      y = Y_MIN - FISH_OFFSCREEN_MARGIN;
       vx = (rng.next() - 0.5) * speed * 0.25;
-      vy = fromTop ? speed : -speed;
+      vy = speed;
     }
   } else if (spawnInward) {
     const tgx = PLAYER_X + (rng.next() - 0.5) * 100;
-    const tgy = PLAYER_Y + (rng.next() - 0.5) * 100;
+    const tgy = Math.min(Y_MAX - 40, PLAYER_Y + (rng.next() - 0.5) * 100);
     const inward = spawnInwardFromEdge(rng, tgx, tgy, speed);
     x = inward.x;
     y = inward.y;
@@ -194,8 +190,21 @@ export function updateFish(
 
     f.x += f.vx * dt;
     f.y += f.vy * dt;
+    const ignoresBottomSafeZone = f.type === FishType.Large
+      && (f.sharkAttackPhase === 'charging' || (f.sharkFleeTimer ?? 0) > 0);
+    if (!ignoresBottomSafeZone && f.y > Y_MAX) {
+      f.y = Y_MAX;
+      if (f.vy > 0) f.vy = -Math.abs(f.vy) * 0.55;
+    }
 
     if (f.ftueFleeing) {
+      if (f.hitFlash > 0) f.hitFlash = Math.max(0, f.hitFlash - dt * 6);
+      continue;
+    }
+
+    if (f.type === FishType.Large && (f.sharkReattackTimer ?? 0) > 0) {
+      f.vx = 0;
+      f.vy = 0;
       if (f.hitFlash > 0) f.hitFlash = Math.max(0, f.hitFlash - dt * 6);
       continue;
     }
@@ -289,6 +298,7 @@ export function removeDespawnedFish(fish: FishState[]): FishState[] {
   const margin = FISH_OFFSCREEN_MARGIN * 2;
   return fish.filter((f) => {
     if (!f.alive) return false;
+    if (f.persistentShark) return true;
     const s = f.drawScale ?? 1;
     const hw = FISH_HITBOX_W[f.type] * s;
     const hh = FISH_HITBOX_H[f.type] * s;

@@ -5,13 +5,62 @@ import type {
   ConsumableState,
   FishType,
   FloatingTextState,
+  FtuePromptId,
+  FtueStage,
   GamePhase,
   LeaderboardState,
   ParticleState,
   TutorialHintId,
   UpgradeState,
 } from '../core/Types';
-import type { OceanTransitionDraw } from './oceanTransition';
+/** Waterline strip + scroll (bubbles live on `DiveTransitionDraw`). */
+export interface DiveTransitionWaterline {
+  parentY: number;
+  surfaceScrollX: number;
+  surfaceDrawH: number;
+  surfaceDrawW: number;
+  groupAlpha: number;
+}
+
+/**
+ * Single snapshot for `Diving` / early `Breaching` cinematic (masked wipe + optional diver).
+ * Replaces the former `oceanTransition` + `transitionBackdrop` + UI alpha fields.
+ */
+export interface DiveTransitionDraw {
+  backdrop: { boat: number; underwater: number } | null;
+  waterline: DiveTransitionWaterline | null;
+  bubbles: ReadonlyArray<{ variant: number; lx: number; ly: number; alpha: number }>;
+  /** Menu→game only; feet at deck anchor + fall offset. */
+  diver: {
+    pose: 'stand' | 'jump';
+    x: number;
+    y: number;
+    alpha: number;
+    drawW: number;
+    drawH: number;
+  } | null;
+  /** Menu→game camera push toward the bear while UI fades. */
+  camera: { x: number; y: number; zoom: number } | null;
+  /** Game→menu: HUD/overlay alpha during the end-of-run prelude. */
+  breachUiAlpha: number;
+  /** Game→menu: slides first-person character + gun down before the waterline arrives. */
+  breachPlayerExitOffset: number;
+  /** Game→menu: slight camera push before fish scatter. */
+  breachCameraZoom: number;
+  /** Game→menu: click-to-dismiss leaderboard interstitial alpha. */
+  breachLeaderboardAlpha: number;
+  /** Extra full-bleed boat layer faded in over the menu during the dive intro. */
+  boatOverlayAlpha: number;
+  /** Boat menu chrome opacity (GO FISH, stats, …). */
+  menuUiAlpha: number;
+  /**
+   * Menu→game: after the waterline VFX group fades, full-screen underwater overlay alpha (1→0)
+   * before `Action` so the handoff matches real gameplay lighting.
+   */
+  oceanOverlayAlpha: number;
+  breachShowBoatRevealOnly: boolean;
+  breachBoatRevealAlpha: number;
+}
 
 export interface RenderPlayerState {
   x: number;
@@ -48,6 +97,8 @@ export interface RenderState {
 
   /** First-dive Reels-style tutorial (frozen fish until first tap) */
   ftueActive: boolean;
+  ftueStage: FtueStage;
+  ftuePrompt: FtuePromptId | null;
 
   // World
   shakeX: number;
@@ -55,6 +106,9 @@ export interface RenderState {
   player: RenderPlayerState;
   spears: RenderSpearState[];
   fish: RenderFishState[];
+  ftueHandTarget: { x: number; y: number } | null;
+  ftueTreasureZoom: number;
+  ftueTreasureFocusBlend: number;
   particles: ParticleState[];
   floatingTexts: FloatingTextState[];
   catchCoinBursts: CatchCoinBurstState[];
@@ -95,6 +149,7 @@ export interface RenderState {
   lastRunDurationSec: number;
   lastRunCatchCount: number;
   leaderboard: LeaderboardState;
+  upgradeBackHighlight: boolean;
 
   // Consumable active state (action phase)
   baitActive: boolean;
@@ -102,21 +157,8 @@ export interface RenderState {
   baitY: number;
   baitFraction: number;  // 1 = fresh, 0 = expired
 
-  // Transition / scene chrome
-  /** Populated while `Diving` or `Breaching`; otherwise null. */
-  oceanTransition: OceanTransitionDraw | null;
-
-  /**
-   * Full-screen `boat-bg` / `underwater-bg` alphas under the ocean VFX (and under in-game world during breach).
-   * Null during breach boat-reveal tail (see `breachBoatRevealAlpha`).
-   */
-  transitionBackdrop: { boat: number; underwater: number } | null;
-  /** Boat UI opacity while dive transition starts. */
-  transitionUiAlpha: number;
-  /** True once breach ocean move has finished (`breachTimer` ≥ fade + move). */
-  breachShowBoatRevealOnly: boolean;
-  /** Breach end: 0 = start of boat reveal; 1 = full `drawBoatScreen` before phase flip. */
-  breachBoatRevealAlpha: number;
+  // Transition / scene chrome (`Diving`, early `Breaching`; null otherwise)
+  diveTransition: DiveTransitionDraw | null;
 
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;

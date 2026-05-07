@@ -132,15 +132,16 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     const flash = btn.id === 'net' ? state.hudConsumableFlash.net : state.hudConsumableFlash.bait;
     const flashPulse = flash > 0 ? flash / 0.34 : 0;
     const btnPulse = btn.id === 'bait' && state.baitActive ? 0.5 + 0.5 * Math.sin(Date.now() / 220) : 0;
+    const ftuePulse = state.ftuePrompt === 'useConsumables' ? 0.5 + 0.5 * Math.sin(Date.now() / 180) : 0;
     const ringBoost = 10 + flashPulse * 22;
     const alphaBoost = flashPulse * 0.35;
     renderer.drawEllipseAlpha(
       C.amber,
-      0.15 + btnPulse * 0.30 + alphaBoost,
+      0.15 + btnPulse * 0.30 + alphaBoost + ftuePulse * 0.22,
       btn.cx,
       HUD_CONSUMABLE_BUTTON_Y,
-      HUD_CONSUMABLE_BUTTON_RADIUS + ringBoost * 0.45,
-      HUD_CONSUMABLE_BUTTON_RADIUS + ringBoost * 0.45,
+      HUD_CONSUMABLE_BUTTON_RADIUS + ringBoost * 0.45 + ftuePulse * 12,
+      HUD_CONSUMABLE_BUTTON_RADIUS + ringBoost * 0.45 + ftuePulse * 12,
     );
     renderer.drawEllipseAlpha(C.bg, 0.94, btn.cx, HUD_CONSUMABLE_BUTTON_Y, HUD_CONSUMABLE_BUTTON_RADIUS, HUD_CONSUMABLE_BUTTON_RADIUS);
     renderer.drawEllipseAlpha(
