@@ -19,33 +19,22 @@ export const AssetIds = {
   fishBoss: 'fishBoss',
   /** Steampunk clownfish */
   fishClown: 'fishClown',
-  fisherman: 'fisherman',
-  bubble: 'bubble',
   underwaterBg: 'underwaterBg',
-  playerCat: 'playerCat',
-  /** Bottom-fixed turret; line/spear emits from the cannon muzzle in code */
-  playerTurret: 'playerTurret',
   boatBg: 'boatBg',
-  boatSprite: 'boatSprite',
-  /** Boat menu title art (full logo PNG). */
-  titleLogo: 'titleLogo',
 
-  // Upgrade sprites (level 1-5)
+  // Upgrade sprites (level 1-4)
   upSpeargun1: 'upSpeargun1',
   upSpeargun2: 'upSpeargun2',
   upSpeargun3: 'upSpeargun3',
   upSpeargun4: 'upSpeargun4',
-  upSpeargun5: 'upSpeargun5',
   upHaul1: 'upHaul1',
   upHaul2: 'upHaul2',
   upHaul3: 'upHaul3',
   upHaul4: 'upHaul4',
-  upHaul5: 'upHaul5',
   upOxygen1: 'upOxygen1',
   upOxygen2: 'upOxygen2',
   upOxygen3: 'upOxygen3',
   upOxygen4: 'upOxygen4',
-  upOxygen5: 'upOxygen5',
 
   // Consumable and HUD icons
   iconNet: 'iconNet',

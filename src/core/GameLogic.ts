@@ -146,6 +146,9 @@ const FTUE_TREASURE_ZOOM_IN_SEC = 0.75;
 const FTUE_TREASURE_ZOOM_HOLD_SEC = 0.7;
 const FTUE_TREASURE_ZOOM_OUT_SEC = 0.75;
 const FTUE_TREASURE_ZOOM_MAX = 1.28;
+type ActionUpdateResult = { advanceActionVfx: boolean };
+const ACTION_RUNNING: ActionUpdateResult = { advanceActionVfx: true };
+const ACTION_PAUSED: ActionUpdateResult = { advanceActionVfx: false };
 const TUTORIAL_HINT_COPY: Record<TutorialHintId, { title: string; body: string }> = {
   catchBasics: {
     title: 'Catch fish, then reel them in',
@@ -265,6 +268,16 @@ function getSharkHitsToKill(speargunLevel: number): number {
 
 function getSharkReattackWait(rng: Rng): number {
   return rng.between(SHARK_REATTACK_WAIT_MIN_SEC, SHARK_REATTACK_WAIT_MAX_SEC);
+}
+
+function countAliveFish(fish: FullGameState['fish'], type?: FishType): number {
+  let count = 0;
+  for (const current of fish) {
+    if (!current.alive) continue;
+    if (type != null && current.type !== type) continue;
+    count += 1;
+  }
+  return count;
 }
 
 function spawnCatchCoinBurst(state: FullGameState, x: number, y: number, value: number): void {
@@ -466,7 +479,6 @@ export function createInitialState(): FullGameState {
     diveTimer: 0,
     breachTimer: 0,
     oceanBubbles: [],
-    oceanBubblesSpawned: false,
     diveJumpSfxPlayed: false,
     breachLeaderboardDismissed: false,
     breachLeaderboardFadeElapsed: 0,
@@ -564,10 +576,12 @@ function finalizeRunToBoat(state: FullGameState): void {
   state.harpoonGunAnimElapsed = -1;
   state.pendingEvents.push({
     type: 'runEnded',
-    earnings: state.sessionEarnings,
+    earnings: state.lastRunEarnings,
     runDurationSec: state.lastRunDurationSec,
     catchCount: state.lastRunCatchCount,
   });
+  state.sessionEarnings = 0;
+  state.sessionCatchCount = 0;
   if (state.ftue.stage === 'treasureUpgrade') {
     state.ftue.prompt = 'upgradeHarpoon';
     state.upgradePanelOpen = null;
@@ -778,7 +792,7 @@ function updateNetVfx(state: FullGameState, dt: number, rng: Rng): void {
   }
 }
 
-function updateAction(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
+function updateAction(state: FullGameState, dt: number, commands: GameInputCommand[]): ActionUpdateResult {
   const rng = getGameRng();
   decayHudConsumableFlash(state, dt);
   if (state.catchFlash > 0) {
@@ -793,7 +807,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
   if (state.ftue.stage === 'sharkEncounter' && state.ftueActive) {
     if (!commands.some((command) => command.type === 'tap')) {
-      return;
+      return ACTION_PAUSED;
     }
     state.ftueActive = false;
     state.ftue.prompt = null;
@@ -816,14 +830,14 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         state.ftue.stage = 'firstTreasureCatch';
         state.ftue.prompt = 'catchTreasure';
       }
-      return;
+      return ACTION_PAUSED;
     }
   }
 
   if (state.treasureReveal) {
     updateTreasureReveal(state, dt, rng);
     if (state.treasureReveal) {
-      return;
+      return ACTION_PAUSED;
     }
   }
 
@@ -863,7 +877,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
           f.vy += (dy / d) * s;
         }
         {
-          const liveN = state.fish.filter((f) => f.alive).length;
+          const liveN = countAliveFish(state.fish);
           const n = Math.min(
             BAIT_SCHOOL_FISH_COUNT,
             Math.max(0, FISH_SPAWN_MAX_ALIVE - liveN),
@@ -943,7 +957,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   if (WAVE_DURATION_SEC > 0) {
     const waveBlock = Math.floor(state.sessionTime / WAVE_DURATION_SEC);
     if (waveBlock > state.lastWaveBurstIndex) {
-      const liveNow = state.fish.filter((f) => f.alive).length;
+      const liveNow = countAliveFish(state.fish);
       const spearDensityExtra = Math.ceil(
         Math.max(0, state.upgrades.speargun - 1) / FISH_DENSITY_SPEARGUN_LEVELS_PER_EXTRA,
       );
@@ -963,7 +977,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
           : n <= 1
             ? 0
             : Math.min(n, Math.max(1, Math.round(n * WAVE_NEAR_SPAWN_FRACTION)));
-        let sharksAlive = state.fish.filter((f) => f.alive && f.type === FishType.Large).length;
+        let sharksAlive = countAliveFish(state.fish, FishType.Large);
         for (let u = 0; u < nearN; u += 1) {
           const fish = spawnFish(state.nextFishId++, rng, state.sessionTime, {
             spawnInward: true,
@@ -993,9 +1007,9 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
   state.fishSpawnTimer -= dt;
   if (state.fishSpawnTimer <= 0) {
-    const liveFish = state.fish.filter((f) => f.alive).length;
+    const liveFish = countAliveFish(state.fish);
     if (liveFish < FISH_SPAWN_MAX_ALIVE) {
-      const sharksAlive = state.fish.filter((f) => f.alive && f.type === FishType.Large).length;
+      const sharksAlive = countAliveFish(state.fish, FishType.Large);
       state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, {
         avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
       }));
@@ -1387,9 +1401,11 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   if (state.roundTimeLeft <= 0) {
     beginBreaching(state);
   }
+  return ACTION_RUNNING;
 }
 
 export function update(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
+  let advanceActionVfx = true;
   switch (state.phase) {
     case GamePhase.Boat:
       updateBoat(state, commands);
@@ -1401,7 +1417,7 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       updateBreaching(state, dt, commands);
       break;
     case GamePhase.Action:
-      updateAction(state, dt, commands);
+      advanceActionVfx = updateAction(state, dt, commands).advanceActionVfx;
       break;
   }
 
@@ -1409,7 +1425,7 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
   updateCatchCoinBursts(state, dt);
   state.upgradeBackHighlightTimer = Math.max(0, state.upgradeBackHighlightTimer - dt);
 
-  if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
+  if ((state.phase === GamePhase.Action && advanceActionVfx) || state.phase === GamePhase.Breaching) {
     updateNetVfx(state, dt, getGameRng());
     if (state.harpoonGunAnimElapsed >= 0) {
       state.harpoonGunAnimElapsed += dt;
@@ -1425,6 +1441,52 @@ export function update(state: FullGameState, dt: number, commands: GameInputComm
       state.sharkBiteTeethElapsed = -1;
     }
   }
+}
+
+function buildFishRenderState(state: FullGameState): RenderState['fish'] {
+  const fishRenderState: RenderState['fish'] = [];
+  for (const current of state.fish) {
+    if (!current.alive && current.hitFlash <= 0) continue;
+
+    // Tilt sprite in the direction of travel (clamped to ±35°)
+    const maxTilt = Math.PI * 0.19;
+    const rawTilt = Math.atan2(current.vy, Math.abs(current.vx) + 0.01);
+    // Sinusoidal tail-wag — each fish offset by id so they don't sync
+    const wobble = current.type === FishType.Jelly ? 0
+      : Math.sin(state.sessionTime * 7.5 + current.id * 2.1) * 0.09;
+    const rotation = current.type === FishType.Jelly ? 0
+      : Math.max(-maxTilt, Math.min(maxTilt, rawTilt + wobble));
+    const isAggressive = current.type === FishType.Large
+      && current.alive
+      && current.age >= SHARK_AGGRO_DELAY
+      && !current.hasAttacked
+      && (current.sharkFleeTimer ?? 0) <= 0
+      && current.sharkAttackPhase === 'charging';
+    const attackProgress = isAggressive
+      ? Math.min(1, (current.sharkChargeTimer ?? 0) / SHARK_ATTACK_GROW_SEC)
+      : 0;
+    const sharkMaxHp = current.type === FishType.Large
+      ? state.ftue.stage === 'sharkEncounter'
+        ? 1
+        : getSharkHitsToKill(state.upgrades.speargun)
+      : undefined;
+    const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? sharkMaxHp) : undefined;
+    fishRenderState.push({
+      x: current.x,
+      y: current.y,
+      type: current.type,
+      drawScale: current.drawScale,
+      hitFlash: current.hitFlash,
+      facingLeft: current.vx > 0,  // sprites face LEFT natively — flip when moving right
+      rotation,
+      isAggressive,
+      attackProgress,
+      isFleeing: current.type === FishType.Large && (current.sharkFleeTimer ?? 0) > 0,
+      hitPoints: sharkHp,
+      maxHitPoints: sharkMaxHp,
+    });
+  }
+  return fishRenderState;
 }
 
 export function getRenderState(state: FullGameState): RenderState {
@@ -1482,47 +1544,7 @@ export function getRenderState(state: FullGameState): RenderState {
         carryingFishScale,
       };
     }),
-    fish: state.fish
-      .filter((current) => current.alive || current.hitFlash > 0)
-      .map((current) => {
-        // Tilt sprite in the direction of travel (clamped to ±35°)
-        const maxTilt = Math.PI * 0.19;
-        const rawTilt = Math.atan2(current.vy, Math.abs(current.vx) + 0.01);
-        // Sinusoidal tail-wag — each fish offset by id so they don't sync
-        const wobble = current.type === FishType.Jelly ? 0
-          : Math.sin(state.sessionTime * 7.5 + current.id * 2.1) * 0.09;
-        const rotation = current.type === FishType.Jelly ? 0
-          : Math.max(-maxTilt, Math.min(maxTilt, rawTilt + wobble));
-        const isAggressive = current.type === FishType.Large
-          && current.alive
-          && current.age >= SHARK_AGGRO_DELAY
-          && !current.hasAttacked
-          && (current.sharkFleeTimer ?? 0) <= 0
-          && current.sharkAttackPhase === 'charging';
-        const attackProgress = isAggressive
-          ? Math.min(1, (current.sharkChargeTimer ?? 0) / SHARK_ATTACK_GROW_SEC)
-          : 0;
-        const sharkMaxHp = current.type === FishType.Large
-          ? state.ftue.stage === 'sharkEncounter'
-            ? 1
-            : getSharkHitsToKill(state.upgrades.speargun)
-          : undefined;
-        const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? sharkMaxHp) : undefined;
-        return {
-          x: current.x,
-          y: current.y,
-          type: current.type,
-          drawScale: current.drawScale,
-          hitFlash: current.hitFlash,
-          facingLeft: current.vx > 0,  // sprites face LEFT natively — flip when moving right
-          rotation,
-          isAggressive,
-          attackProgress,
-          isFleeing: current.type === FishType.Large && (current.sharkFleeTimer ?? 0) > 0,
-          hitPoints: sharkHp,
-          maxHitPoints: sharkMaxHp,
-        };
-      }),
+    fish: buildFishRenderState(state),
     ftueHandTarget: (() => {
       if (
         state.ftue.prompt !== 'tapFightBack'

@@ -39,7 +39,7 @@ export interface DiveTransitionDraw {
     drawW: number;
     drawH: number;
   } | null;
-  /** Menu→game camera push toward the bear while UI fades. */
+  /** Menu→game camera push toward the diver while UI fades. */
   camera: { x: number; y: number; zoom: number } | null;
   /** Game→menu: HUD/overlay alpha during the end-of-run prelude. */
   breachUiAlpha: number;

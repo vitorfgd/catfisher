@@ -23,7 +23,7 @@ import {
   OCEAN_SURFACE_NATURAL_H,
   OCEAN_SURFACE_NATURAL_W,
 } from './Constants';
-import { DIVE_TRANSITION, GAME_TO_MENU_BREACH_TOTAL_SEC } from './diveTransitionConfig';
+import { DIVE_TRANSITION, GAME_TO_MENU_BREACH_TOTAL_SEC, getMenuToGameDiveSegmentEnds } from './diveTransitionConfig';
 import { getGameRng } from './GameRng';
 import { FishType, GamePhase, type FullGameState } from './Types';
 
@@ -58,26 +58,6 @@ function diveParentYEndpoints(): { yStart: number; yEnd: number } {
 
 function bubbleFadeInAlpha(age: number): number {
   return Math.min(1, age / OCEAN_BUBBLE_FADE_IN_SEC);
-}
-
-function diveSegmentEnds(): {
-  boatFadeEnd: number;
-  delayEnd: number;
-  fallEnd: number;
-  waterlineStart: number;
-  moveEnd: number;
-  fadeEnd: number;
-  total: number;
-} {
-  const D = DIVE_TRANSITION;
-  const boatFadeEnd = D.boatFadeInDuration;
-  const delayEnd = boatFadeEnd + D.diverJumpDelay;
-  const fallEnd = delayEnd + D.diverFallDuration;
-  const waterlineStart = Math.max(delayEnd, fallEnd - D.waterlineLeadInDuration);
-  const moveEnd = waterlineStart + D.waterlineRiseDuration;
-  const fadeEnd = moveEnd + D.waterlineFadeOutDuration;
-  const total = fadeEnd + D.oceanOverlayFadeOutDuration;
-  return { boatFadeEnd, delayEnd, fallEnd, waterlineStart, moveEnd, fadeEnd, total };
 }
 
 function breachSegmentEnds(): {
@@ -134,7 +114,6 @@ export function playMenuToGameTransition(state: FullGameState): void {
   state.phase = GamePhase.Diving;
   state.diveTimer = 0;
   state.oceanBubbles = [];
-  state.oceanBubblesSpawned = false;
   state.diveJumpSfxPlayed = false;
   state.pendingEvents.push({ type: 'diveStarted' });
 }
@@ -145,7 +124,6 @@ export function playGameToMenuTransition(state: FullGameState): void {
   state.phase = GamePhase.Breaching;
   state.breachTimer = 0;
   state.oceanBubbles = [];
-  state.oceanBubblesSpawned = false;
   state.harpoonGunAnimElapsed = -1;
 }
 
@@ -160,7 +138,7 @@ export function updateDiveTransition(state: FullGameState, dt: number): void {
 function updateDivingTransition(state: FullGameState, dt: number): void {
   const rng = getGameRng();
   const { surfaceDrawH } = oceanSurfaceLayout();
-  const seg = diveSegmentEnds();
+  const seg = getMenuToGameDiveSegmentEnds();
   const D = DIVE_TRANSITION;
   const prevT = state.diveTimer;
   state.diveTimer += dt;
@@ -252,7 +230,7 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
 }
 
 function buildBackdropDiving(t: number): { boat: number; underwater: number } | null {
-  const seg = diveSegmentEnds();
+  const seg = getMenuToGameDiveSegmentEnds();
   const M = DIVE_TRANSITION.waterlineRiseDuration;
   if (t < seg.moveEnd) {
     if (t < seg.waterlineStart) return { boat: 1, underwater: 0 };
@@ -271,7 +249,7 @@ function buildWaterlineDiving(t: number): {
 } | null {
   const { scrollRange } = oceanSurfaceLayout();
   const { yStart, yEnd } = diveParentYEndpoints();
-  const seg = diveSegmentEnds();
+  const seg = getMenuToGameDiveSegmentEnds();
   const M = DIVE_TRANSITION.waterlineRiseDuration;
   const F = DIVE_TRANSITION.waterlineFadeOutDuration;
 
@@ -307,7 +285,7 @@ function buildWaterlineDiving(t: number): {
 
 function buildDiverDiving(t: number): DiveTransitionDraw['diver'] {
   const D = DIVE_TRANSITION;
-  const seg = diveSegmentEnds();
+  const seg = getMenuToGameDiveSegmentEnds();
   const boat = getBoatBackgroundDrawRect();
   const anchorX = boat.x + D.diverDeckAnchor.xFrac * boat.w;
   const anchorY = boat.y + D.diverDeckAnchor.yFrac * boat.h;
@@ -350,7 +328,7 @@ function buildDiverDiving(t: number): DiveTransitionDraw['diver'] {
 
 function buildDiveCameraDiving(t: number): DiveTransitionDraw['camera'] {
   const D = DIVE_TRANSITION;
-  const seg = diveSegmentEnds();
+  const seg = getMenuToGameDiveSegmentEnds();
   const boat = getBoatBackgroundDrawRect();
   const x = boat.x + D.diverDeckAnchor.xFrac * boat.w;
   const y = boat.y + D.diverDeckAnchor.yFrac * boat.h;
@@ -438,7 +416,7 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
   if (state.phase !== GamePhase.Diving && state.phase !== GamePhase.Breaching) return null;
 
   const { surfaceDrawH, surfaceDrawW } = oceanSurfaceLayout();
-  const segDive = diveSegmentEnds();
+  const segDive = getMenuToGameDiveSegmentEnds();
   const segBreach = breachSegmentEnds();
 
   if (state.phase === GamePhase.Diving) {

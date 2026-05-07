@@ -6,11 +6,12 @@
     "dev": "vite",
     "typecheck": "tsc --noEmit",
     "check:ts": "tsc --noEmit",
+    "check:scripts": "tsc --noEmit -p tsconfig.scripts.json",
     "check:invariants": "tsx scripts/check-invariants.ts",
-    "check": "npm run check:ts && npm run check:invariants",
+    "check": "npm run check:ts && npm run check:scripts && npm run check:invariants",
     "test": "vitest run",
     "test:watch": "vitest",
-    "build": "tsc -p tsconfig.build.json && vite build",
+    "build": "tsc --noEmit -p tsconfig.build.json && vite build",
     "preview": "vite preview"
   },
   "devDependencies": {

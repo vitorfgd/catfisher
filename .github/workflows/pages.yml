@@ -45,6 +45,12 @@ jobs:
             echo "Using base /$NAME/ for project site"
           fi
 
+      - name: Check
+        run: npm run check
+
+      - name: Test
+        run: npm test
+
       - name: Build
         run: npm run build
         env:

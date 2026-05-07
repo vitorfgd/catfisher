@@ -948,9 +948,6 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   ) {
     drawNetConsumableVfx(renderer, state.netVfx.elapsed);
   }
-  /*if (state.phase === GamePhase.Action || state.phase === GamePhase.Breaching) {
-    drawThirdPersonHelmetOverlay(renderer);
-  }*/
   const breachUiAlpha = state.phase === GamePhase.Breaching
     ? (state.diveTransition?.breachUiAlpha ?? 1)
     : 1;

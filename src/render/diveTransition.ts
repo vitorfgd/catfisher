@@ -146,7 +146,7 @@ export function drawDiveTransitionFull(renderer: GameRenderer, state: RenderStat
   }
 
   // Screen-space mask: the underwater background is drawn only from the waterline down,
-  // so it covers the zoomed boat scene and falling bear like a video-editing wipe.
+  // so it covers the zoomed boat scene and falling diver like a video-editing wipe.
   drawUnderwaterReveal(renderer, dive);
 
   if (dive.waterline != null && dive.waterline.groupAlpha > 0.004) {

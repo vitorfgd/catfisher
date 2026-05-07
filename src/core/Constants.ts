@@ -21,18 +21,9 @@ export function getBoatBackgroundDrawRect(): { x: number; y: number; w: number; 
 export const HUD_TIME_STRIP_HEIGHT = 50;
 export const HUD_TIME_STRIP_Y = CANVAS_HEIGHT - HUD_TIME_STRIP_HEIGHT;
 
-// Player — turret fixed to the bottom of the playfield; (PLAYER_X, PLAYER_Y) = bottom center of the sprite
+// Player anchor for the first-person harpoon view.
 export const PLAYER_X = CANVAS_WIDTH / 2;
 export const PLAYER_Y = CANVAS_HEIGHT;
-export const PLAYER_WIDTH = 34;
-export const PLAYER_HEIGHT = 48;
-
-/** Draw size for `playerTurret` art (source PNG is 500x500) */
-export const TURRET_SPRITE_W = 240;
-export const TURRET_SPRITE_H = 240;
-/** Muzzle in sprite space: U = horizontal from left edge, V = vertical from top (0 = top). */
-export const TURRET_MUZZLE_U = 0.64;
-export const TURRET_MUZZLE_V = 0.18;
 
 // Spear
 export const SPEAR_SPEED = 920;
@@ -84,15 +75,10 @@ export const FISH_BOTTOM_SAFE_ZONE_PX = 220;
 // Ocean dive / breach transition — derived from `DIVE_TRANSITION` (see diveTransitionConfig.ts).
 export const OCEAN_TRANSITION_MOVE_SEC = DIVE_TRANSITION.waterlineRiseDuration;
 export const OCEAN_TRANSITION_FADE_SEC = DIVE_TRANSITION.waterlineFadeOutDuration;
-/** @deprecated Stages are driven by `diveTransitionController`; kept as `0` for any stale references. */
-export const OCEAN_TRANSITION_PREFACE_BEFORE_RISE_SEC = 0;
 /** Breach: fade full boat screen in before switching to `Boat` phase (replaces transition boat layer). */
 export const OCEAN_TRANSITION_BREACH_BOAT_REVEAL_SEC = DIVE_TRANSITION.breachBoatRevealDuration;
 export const OCEAN_DIVE_TOTAL_SEC = MENU_TO_GAME_DIVE_TOTAL_SEC;
 export const OCEAN_BREACH_TOTAL_SEC = GAME_TO_MENU_BREACH_TOTAL_SEC;
-/** Spawn ~8 bubbles at this fraction through the move segment (dive and breach). */
-export const OCEAN_TRANSITION_BUBBLE_SPAWN_AT_MOVE = 0.33;
-export const OCEAN_TRANSITION_BUBBLE_COUNT = 8;
 /** Upward drift in parent-local space (px/s). */
 export const OCEAN_BUBBLE_RISE_SPEED = 88;
 export const OCEAN_BUBBLE_FADE_IN_SEC = 0.22;
@@ -221,8 +207,6 @@ export const BOAT_SHELL_W = CANVAS_WIDTH - 2 * UPGRADE_MARGIN;
  * Slightly tighter than the old 14px “sheet” pad so the content column gains width while the shell stays wide.
  */
 export const BOAT_DECK_CONTENT_INSET_H = 8;
-/** @deprecated use BOAT_DECK_CONTENT_INSET_H (kept equal for any stray references). */
-export const BOAT_SHEET_PAD = BOAT_DECK_CONTENT_INSET_H;
 export const UPGRADE_BUTTON_W = BOAT_SHELL_W - 2 * BOAT_DECK_CONTENT_INSET_H;
 /** Content column inside the shell (must match hit-tests in UiLayout). */
 export const BOAT_CONTENT_X = BOAT_SHELL_X + BOAT_DECK_CONTENT_INSET_H;
@@ -277,8 +261,6 @@ export const UPGRADE_LAST_ROW_BOTTOM =
  * Section header block height (UPGRADES + GEAR): label + rule — must match `drawSectionHeader` in boatScreen.
  */
 export const SECTION_HEADER_BLOCK_H = 46;
-/** @deprecated alias — use SECTION_HEADER_BLOCK_H */
-export const GEAR_SECTION_HEADER_H = SECTION_HEADER_BLOCK_H;
 /** Gap from UPGRADES header top to first upgrade row. */
 export const UPGRADE_SECTION_HEADER_GAP = 10;
 /** Space from last upgrade row to GEAR title (+20 vs legacy for spacing between section plates). */
@@ -290,7 +272,7 @@ export const CONSUMABLE_H = 88;
 export const CONSUMABLE_GAP = 12;
 export const CONSUMABLE_W = Math.floor((BOAT_SECTION_CONTENT_W - CONSUMABLE_GAP) / 2);
 export const CONSUMABLE_Y =
-  GEAR_HEADER_LABEL_Y + GEAR_SECTION_HEADER_H + MARGIN_GEAR_TO_CONSUMABLE;
+  GEAR_HEADER_LABEL_Y + SECTION_HEADER_BLOCK_H + MARGIN_GEAR_TO_CONSUMABLE;
 // Upgrade detail panel (full-screen overlay when a button is tapped)
 export const UPGRADE_PANEL_BUY_Y = CANVAS_HEIGHT - 120;
 export const UPGRADE_PANEL_BUY_H = 60;

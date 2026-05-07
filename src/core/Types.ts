@@ -297,8 +297,6 @@ export interface FullGameState {
   /** Elapsed seconds during `Breaching` (ocean breach-out). */
   breachTimer: number;
   oceanBubbles: OceanBubbleParticle[];
-  /** True after bubbles spawned for the current transition move segment. */
-  oceanBubblesSpawned: boolean;
   /** Menu→game: ensures `diverJumped` fires once per dive. */
   diveJumpSfxPlayed: boolean;
   /** Game→menu: player tapped to close the interstitial leaderboard. */

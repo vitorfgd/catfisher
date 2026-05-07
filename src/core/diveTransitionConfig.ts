@@ -13,9 +13,9 @@ export const DIVE_TRANSITION = {
   /** Menu→game: diver falls toward the water (ease-in on Y). */
   diverFallDuration: 1.05,
   diverFallDistance: 980,
-  /** Waterline begins this many seconds before the fall pose finishes, so it can engulf the bear. */
+  /** Waterline begins this many seconds before the fall pose finishes, so it can engulf the diver. */
   waterlineLeadInDuration: 0.78,
-  /** Menu→game: camera push toward the bear before the waterline rises. */
+  /** Menu→game: camera push toward the diver before the waterline rises. */
   cameraZoom: 1.55,
   /** Menu→game: waterline parent moves from below screen to above (wipe reveals ocean). */
   waterlineRiseDuration: 1.29,
@@ -63,14 +63,28 @@ export const DIVE_TRANSITION = {
   diverJumpNaturalH: 550,
 } as const;
 
+export function getMenuToGameDiveSegmentEnds(): {
+  boatFadeEnd: number;
+  delayEnd: number;
+  fallEnd: number;
+  waterlineStart: number;
+  moveEnd: number;
+  fadeEnd: number;
+  total: number;
+} {
+  const D = DIVE_TRANSITION;
+  const boatFadeEnd = D.boatFadeInDuration;
+  const delayEnd = boatFadeEnd + D.diverJumpDelay;
+  const fallEnd = delayEnd + D.diverFallDuration;
+  const waterlineStart = Math.max(delayEnd, fallEnd - D.waterlineLeadInDuration);
+  const moveEnd = waterlineStart + D.waterlineRiseDuration;
+  const fadeEnd = moveEnd + D.waterlineFadeOutDuration;
+  const total = fadeEnd + D.oceanOverlayFadeOutDuration;
+  return { boatFadeEnd, delayEnd, fallEnd, waterlineStart, moveEnd, fadeEnd, total };
+}
+
 /** Total `Diving` phase duration before switching to `Action`. */
-export const MENU_TO_GAME_DIVE_TOTAL_SEC =
-  DIVE_TRANSITION.boatFadeInDuration
-  + DIVE_TRANSITION.diverJumpDelay
-  + DIVE_TRANSITION.diverFallDuration
-  + DIVE_TRANSITION.waterlineRiseDuration
-  + DIVE_TRANSITION.waterlineFadeOutDuration
-  + DIVE_TRANSITION.oceanOverlayFadeOutDuration;
+export const MENU_TO_GAME_DIVE_TOTAL_SEC = getMenuToGameDiveSegmentEnds().total;
 
 /** Total `Breaching` phase duration before `finalizeRunToBoat`. */
 export const GAME_TO_MENU_BREACH_TOTAL_SEC =
