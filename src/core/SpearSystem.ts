@@ -27,6 +27,7 @@ export interface DeliveredCatch {
   y: number;
   fishType: FishType;
   value: number;
+  ftueShowcase: boolean;
 }
 
 export function fireSpear(
@@ -47,6 +48,7 @@ export function fireSpear(
     maxDistance,
     mode: SpearMode.Outbound,
     caughtFishType: null,
+    caughtFishWasFtueShowcase: false,
     caughtFishStartDistance: 0,
     catchValue: 0,
     done: false,
@@ -57,9 +59,11 @@ export function attachCatchToSpear(
   spear: SpearState,
   fishType: FishType,
   catchValue: number,
+  ftueShowcase = false,
 ): void {
   spear.mode = SpearMode.Returning;
   spear.caughtFishType = fishType;
+  spear.caughtFishWasFtueShowcase = ftueShowcase;
   spear.caughtFishStartDistance = Math.max(1, spear.distanceTravelled);
   spear.catchValue = catchValue;
 }
@@ -68,6 +72,7 @@ export function attachCatchToSpear(
 export function returnSpearWithoutCatch(spear: SpearState): void {
   spear.mode = SpearMode.Returning;
   spear.caughtFishType = null;
+  spear.caughtFishWasFtueShowcase = false;
   spear.caughtFishStartDistance = 0;
   spear.catchValue = 0;
 }
@@ -112,6 +117,7 @@ export function updateSpears(
             y: targetY,
             fishType: spear.caughtFishType,
             value: spear.catchValue,
+            ftueShowcase: spear.caughtFishWasFtueShowcase,
           });
         }
         continue;

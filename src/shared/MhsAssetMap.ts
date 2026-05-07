@@ -21,6 +21,7 @@ export const MHS_TEXTURE_PATHS = {
   [AssetIds.fishClown]: '@sprites/fish-clown-metal.png',
   [AssetIds.underwaterBg]: '@sprites/underwater-bg.png',
   [AssetIds.boatBg]: '@sprites/boat-bg.png',
+  [AssetIds.gameLogo]: '@sprites/game-logo.png',
   [AssetIds.upSpeargun1]: '@sprites/up-speargun-1.png',
   [AssetIds.upSpeargun2]: '@sprites/up-speargun-2.png',
   [AssetIds.upSpeargun3]: '@sprites/up-speargun-3.png',

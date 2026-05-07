@@ -1,14 +1,30 @@
 import { afterEach, describe, expect, it } from 'vitest';
 import { DIVE_TRANSITION, getMenuToGameDiveSegmentEnds, MENU_TO_GAME_DIVE_TOTAL_SEC } from './diveTransitionConfig';
-import { OCEAN_BREACH_TOTAL_SEC, OCEAN_DIVE_TOTAL_SEC } from './Constants';
+import { BASE_SPEAR_MAX_DISTANCE, OCEAN_BREACH_TOTAL_SEC, OCEAN_DIVE_TOTAL_SEC, PLAYER_X, PLAYER_Y } from './Constants';
 import { bootstrapActionFtueDive, createInitialState, drainEvents, update } from './GameLogic';
 import { setGameRngForTests } from './GameRng';
 import { Rng } from './Rng';
-import { GamePhase } from './Types';
+import { FishType, GamePhase } from './Types';
+import { BrowserFakeLeaderboardAdapter } from '../platform/LeaderboardAdapter';
 
 afterEach(() => {
   setGameRngForTests(new Rng());
+  delete (globalThis as { localStorage?: Storage }).localStorage;
 });
+
+function installMemoryLocalStorage(): void {
+  const storage = new Map<string, string>();
+  const localStorage = {
+    getItem: (key: string) => storage.get(key) ?? null,
+    setItem: (key: string, value: string) => {
+      storage.set(key, value);
+    },
+  } as Storage;
+  Object.defineProperty(globalThis, 'localStorage', {
+    value: localStorage,
+    configurable: true,
+  });
+}
 
 describe('dive transition timing', () => {
   it('uses the overlap-aware segment total for exported dive duration', () => {
@@ -61,6 +77,21 @@ describe('run finalization', () => {
   });
 });
 
+describe('run stats aggregation', () => {
+  it('persists best run money and all-time fish caught', () => {
+    installMemoryLocalStorage();
+    const leaderboard = new BrowserFakeLeaderboardAdapter();
+
+    leaderboard.submitFishCaught(4, 120);
+    const snapshot = leaderboard.submitFishCaught(2, 200);
+
+    expect(snapshot.bestFishCaught).toBe(4);
+    expect(snapshot.bestRunMoney).toBe(200);
+    expect(snapshot.bestRunFishCaught).toBe(2);
+    expect(snapshot.allTimeFishCaught).toBe(6);
+  });
+});
+
 describe('action pause semantics', () => {
   it('does not advance action-only VFX while the FTUE shark tableau is frozen', () => {
     const state = createInitialState();
@@ -75,5 +106,148 @@ describe('action pause semantics', () => {
     expect(state.sessionTime).toBe(0);
     expect(state.netVfx?.elapsed).toBe(0);
     expect(state.harpoonGunAnimElapsed).toBe(0);
+  });
+});
+
+describe('ftue progression', () => {
+  it('introduces a fish-catching lesson before treasure', () => {
+    const state = createInitialState();
+    state.phase = GamePhase.Action;
+    state.roundTimeMax = 100;
+    state.roundTimeLeft = 100;
+    state.ftue.stage = 'firstFishIntro';
+    state.fishSpawnTimer = 8_000_000_000_000;
+    state.treasureSpawnTimer = 8_000_000_000_000;
+    state.bossSpawnTimer = 8_000_000_000_000;
+    state.fish.push({
+      id: state.nextFishId++,
+      x: 240,
+      y: 360,
+      vx: 50,
+      vy: 0,
+      wanderTimer: 2,
+      age: 0,
+      hasAttacked: false,
+      type: FishType.Small,
+      alive: true,
+      hitFlash: 0,
+    });
+
+    update(state, 2.01, []);
+
+    expect(state.ftue.stage).toBe('firstFishCatch');
+    expect(state.ftue.prompt).toBe('catchFish');
+    const target = state.fish.find((fish) => fish.type === FishType.Small && fish.ftueShowcase);
+    expect(target).toBeDefined();
+    expect(Math.hypot(target!.x - PLAYER_X, target!.y - PLAYER_Y)).toBeLessThan(BASE_SPEAR_MAX_DISTANCE);
+  });
+
+  it('spawns a catchable O2 fish lesson when the tank reaches yellow', () => {
+    const state = createInitialState();
+    state.phase = GamePhase.Action;
+    state.roundTimeMax = 100;
+    state.roundTimeLeft = 50;
+    state.fishSpawnTimer = 8_000_000_000_000;
+    state.treasureSpawnTimer = 8_000_000_000_000;
+    state.bossSpawnTimer = 8_000_000_000_000;
+
+    update(state, 0.01, []);
+
+    expect(state.ftue.oxygenLessonShown).toBe(true);
+    expect(state.ftue.oxygenLessonFishId).not.toBeNull();
+    expect(state.ftue.prompt).toBe(null);
+
+    update(state, 2, []);
+
+    const lessonFish = state.fish.find((fish) => fish.id === state.ftue.oxygenLessonFishId);
+    expect(lessonFish?.type).toBe(FishType.Puffer);
+    expect(state.ftue.prompt).toBe('oxygenLimit');
+
+    const pausedTimeLeft = state.roundTimeLeft;
+    update(state, 1, []);
+
+    expect(state.roundTimeLeft).toBe(pausedTimeLeft);
+
+    update(state, 0, [{ type: 'tap', x: 240, y: 620 }]);
+    for (let i = 0; i < 80 && state.ftue.oxygenLessonFishId != null; i += 1) {
+      update(state, 0.05, []);
+    }
+
+    expect(state.ftue.oxygenLessonFishId).toBe(null);
+    expect(state.ftue.prompt).toBe(null);
+  });
+
+  it('teaches bait before net and pauses while waiting for each tap', () => {
+    const state = createInitialState();
+    state.ftue.stage = 'secondDiveConsumables';
+
+    update(state, 0, [{ type: 'divePress' }]);
+    update(state, OCEAN_DIVE_TOTAL_SEC, []);
+
+    expect(state.phase).toBe(GamePhase.Action);
+    expect(state.ftue.prompt).toBe(null);
+    expect(state.consumables.bait).toBeGreaterThan(0);
+    expect(state.consumables.net).toBeGreaterThan(0);
+
+    const baitStock = state.consumables.bait;
+    const netStock = state.consumables.net;
+    update(state, 0, [{ type: 'useConsumable', id: 'bait' }]);
+    update(state, 0, [{ type: 'useConsumable', id: 'net' }]);
+
+    expect(state.consumables.bait).toBe(baitStock);
+    expect(state.consumables.net).toBe(netStock);
+    expect(state.ftue.prompt).toBe(null);
+
+    update(state, 1, []);
+
+    const timeLeftAfterFirstSecond = state.roundTimeLeft;
+    expect(state.ftue.prompt).toBe(null);
+
+    update(state, 1.1, []);
+
+    expect(state.roundTimeLeft).toBeLessThan(timeLeftAfterFirstSecond);
+    expect(state.ftue.prompt).toBe('useBait');
+
+    const timeLeftAtBaitPrompt = state.roundTimeLeft;
+    update(state, 1, []);
+
+    expect(state.roundTimeLeft).toBe(timeLeftAtBaitPrompt);
+
+    update(state, 0, [{ type: 'useConsumable', id: 'net' }]);
+
+    expect(state.ftue.prompt).toBe('useBait');
+    expect(state.consumables.net).toBeGreaterThan(0);
+
+    update(state, 0, [{ type: 'useConsumable', id: 'bait' }]);
+
+    expect(state.ftue.prompt).toBe(null);
+    expect(state.ftue.usedBait).toBe(true);
+
+    const netStockBeforePrompt = state.consumables.net;
+    update(state, 0, [{ type: 'useConsumable', id: 'net' }]);
+
+    expect(state.consumables.net).toBe(netStockBeforePrompt);
+    expect(state.ftue.prompt).toBe(null);
+
+    const timeLeftAfterBait = state.roundTimeLeft;
+    update(state, 1, []);
+
+    expect(state.roundTimeLeft).toBeLessThan(timeLeftAfterBait);
+    expect(state.ftue.prompt).toBe(null);
+
+    update(state, 1.1, []);
+
+    expect(state.ftue.prompt).toBe('useNet');
+
+    const timeLeftAtNetPrompt = state.roundTimeLeft;
+    update(state, 1, []);
+
+    expect(state.roundTimeLeft).toBe(timeLeftAtNetPrompt);
+
+    update(state, 0, [{ type: 'useConsumable', id: 'net' }]);
+
+    expect(state.ftue.stage).toBe('complete');
+    expect(state.ftue.prompt).toBe(null);
+    expect(state.ftue.usedNet).toBe(true);
   });
 });

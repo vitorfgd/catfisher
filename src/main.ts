@@ -3,18 +3,19 @@
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GAME_ASPECT_RATIO } from './core/Constants';
 import {
+  applyFtueOxygenLessonSeen,
   applyTutorialSeenState,
   bootstrapActionFtueDive,
   createInitialState,
   setLeaderboardEntries,
 } from './core/GameLogic';
-import { loadImages, BrowserAssetManifest } from './platform/AssetManifest';
+import { loadImages, BrowserAssetManifest, toPublicAssetUrl } from './platform/AssetManifest';
 import { BrowserAudioAdapter } from './platform/BrowserAudioAdapter';
 import { BrowserGameLoop } from './platform/BrowserGameLoop';
 import { BrowserInputAdapter } from './platform/BrowserInputAdapter';
 import { BrowserFakeLeaderboardAdapter } from './platform/LeaderboardAdapter';
 import { Canvas2DRenderer } from './render/Canvas2DRenderer';
-import { isFtueDivePendingInStorage } from './platform/FtueStorage';
+import { isFtueDivePendingInStorage, isFtueOxygenLessonSeenInStorage } from './platform/FtueStorage';
 import { readTutorialSeenState } from './platform/TutorialStorage';
 import { runConsistencyChecks } from './shared/ConsistencyChecks';
 
@@ -81,7 +82,7 @@ async function main(): Promise<void> {
 
   const renderer = new Canvas2DRenderer(ctx, images, CANVAS_WIDTH, CANVAS_HEIGHT);
   const input = new BrowserInputAdapter(canvas);
-  const audio = new BrowserAudioAdapter();
+  const audio = new BrowserAudioAdapter(toPublicAssetUrl(BrowserAssetManifest.sounds.backgroundMusic));
   const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();
   applyTutorialSeenState(gameState, readTutorialSeenState());
@@ -91,10 +92,14 @@ async function main(): Promise<void> {
     leaderboardSnapshot.entries,
     leaderboardSnapshot.bestFishCaught,
     leaderboardSnapshot.lastSubmittedFishCaught,
+    leaderboardSnapshot.bestRunMoney,
+    leaderboardSnapshot.bestRunFishCaught,
+    leaderboardSnapshot.allTimeFishCaught,
   );
   if (isFtueDivePendingInStorage()) {
     bootstrapActionFtueDive(gameState);
   }
+  applyFtueOxygenLessonSeen(gameState, isFtueOxygenLessonSeenInStorage());
 
   const loop = new BrowserGameLoop(gameState, renderer, input, audio, leaderboard);
   loop.start();

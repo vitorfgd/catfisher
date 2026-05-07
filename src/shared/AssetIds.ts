@@ -21,6 +21,7 @@ export const AssetIds = {
   fishClown: 'fishClown',
   underwaterBg: 'underwaterBg',
   boatBg: 'boatBg',
+  gameLogo: 'gameLogo',
 
   // Upgrade sprites (level 1-4)
   upSpeargun1: 'upSpeargun1',

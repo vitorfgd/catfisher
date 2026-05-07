@@ -74,6 +74,7 @@ export interface RenderSpearState {
   angle: number; // radians
   carryingFishType: FishType | null;
   carryingFishScale: number;
+  carryingFtueShowcase: boolean;
 }
 
 export interface RenderFishState {
@@ -109,6 +110,7 @@ export interface RenderState {
   ftueHandTarget: { x: number; y: number } | null;
   ftueTreasureZoom: number;
   ftueTreasureFocusBlend: number;
+  ftueConsumableZoom: number;
   particles: ParticleState[];
   floatingTexts: FloatingTextState[];
   catchCoinBursts: CatchCoinBurstState[];

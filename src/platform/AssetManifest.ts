@@ -15,6 +15,7 @@ export const BrowserAssetManifest = {
     [AssetIds.fishClown]: 'assets/fish-clown-metal.png',
     [AssetIds.underwaterBg]: 'assets/underwater-bg.png',
     [AssetIds.boatBg]: 'assets/boat-bg.png',
+    [AssetIds.gameLogo]: 'assets/game-logo.png',
     [AssetIds.upSpeargun1]: 'assets/up-speargun-1.png',
     [AssetIds.upSpeargun2]: 'assets/up-speargun-2.png',
     [AssetIds.upSpeargun3]: 'assets/up-speargun-3.png',
@@ -43,10 +44,12 @@ export const BrowserAssetManifest = {
     [AssetIds.diverJump]: 'assets/diver_jump.png',
     [AssetIds.gun1]: 'assets/gun_1.png',
   },
-  sounds: {} as Record<string, string>,
+  sounds: {
+    backgroundMusic: 'assets/background-music.mp3',
+  },
 } as const;
 
-function toPublicAssetUrl(path: string): string {
+export function toPublicAssetUrl(path: string): string {
   const base = (import.meta.env.BASE_URL ?? '/').replace(/\/+$/, '');
   const relative = path.replace(/^\/+/, '');
   return `${base}/${relative}`;

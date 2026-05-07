@@ -139,13 +139,31 @@ import {
 
 const TUTORIAL_HINT_DURATION_SEC = 4.2;
 const CATCH_COIN_BURST_LIFE_SEC = 0.78;
-const FTUE_TREASURE_SPAWN_DELAY_SEC = 2.6;
+const FTUE_FISH_LESSON_SPAWN_SEC = 0.6;
+const FTUE_FISH_LESSON_WAIT_AFTER_CATCH_SEC = 3.5;
+const FTUE_FISH_LESSON_ZOOM_IN_SEC = 0.55;
+const FTUE_FISH_LESSON_ZOOM_HOLD_SEC = 0.55;
+const FTUE_FISH_LESSON_ZOOM_OUT_SEC = 0.65;
+const FTUE_FISH_LESSON_ZOOM_MAX = 1.18;
+const FTUE_FISH_LESSON_TARGET_X = CANVAS_WIDTH * 0.5;
+const FTUE_FISH_LESSON_TARGET_Y = CANVAS_HEIGHT - 430;
+const FTUE_CONSUMABLE_ZOOM_IN_SEC = 0.45;
+const FTUE_CONSUMABLE_ZOOM_HOLD_SEC = 0.55;
+const FTUE_CONSUMABLE_ZOOM_OUT_SEC = 0.55;
+const FTUE_CONSUMABLE_ZOOM_MAX = 1.22;
+const FTUE_CONSUMABLE_BAIT_PROMPT_DELAY_SEC = 2.0;
+const FTUE_CONSUMABLE_NET_PROMPT_DELAY_SEC = 2.0;
 const FTUE_TREASURE_SCALE_IN_SEC = 0.55;
 const FTUE_TREASURE_PRE_ZOOM_HOLD_SEC = 0.5;
 const FTUE_TREASURE_ZOOM_IN_SEC = 0.75;
 const FTUE_TREASURE_ZOOM_HOLD_SEC = 0.7;
 const FTUE_TREASURE_ZOOM_OUT_SEC = 0.75;
 const FTUE_TREASURE_ZOOM_MAX = 1.28;
+const FTUE_OXYGEN_LESSON_THRESHOLD = 0.5;
+const FTUE_OXYGEN_LESSON_TARGET_X = CANVAS_WIDTH * 0.5;
+const FTUE_OXYGEN_LESSON_TARGET_Y = CANVAS_HEIGHT - 430;
+const FTUE_OXYGEN_LESSON_SWIM_SPEED = 220;
+const FTUE_OXYGEN_LESSON_SPAWN_X = -58;
 type ActionUpdateResult = { advanceActionVfx: boolean };
 const ACTION_RUNNING: ActionUpdateResult = { advanceActionVfx: true };
 const ACTION_PAUSED: ActionUpdateResult = { advanceActionVfx: false };
@@ -192,6 +210,12 @@ function createFtueRuntimeState(): FullGameState['ftue'] {
     stage: 'none',
     prompt: null,
     treasureIntroTimer: 0,
+    fishLessonTimer: 0,
+    fishLessonCatchWaitTimer: 0,
+    consumableLessonTimer: 0,
+    oxygenLessonShown: false,
+    oxygenLessonTimer: 0,
+    oxygenLessonFishId: null,
     freeConsumablesGranted: false,
     usedNet: false,
     usedBait: false,
@@ -280,6 +304,10 @@ function countAliveFish(fish: FullGameState['fish'], type?: FishType): number {
   return count;
 }
 
+function isFtueFlowActive(state: FullGameState): boolean {
+  return state.ftue.stage !== 'none' && state.ftue.stage !== 'complete';
+}
+
 function spawnCatchCoinBurst(state: FullGameState, x: number, y: number, value: number): void {
   state.catchCoinBursts.push({
     x,
@@ -345,6 +373,84 @@ function spawnFtueTreasureChest(state: FullGameState): void {
   });
 }
 
+function markExistingFtueFishLessonTarget(state: FullGameState): boolean {
+  if (state.fish.some((fish) => fish.alive && fish.ftueShowcase)) return true;
+  let target: FullGameState['fish'][number] | null = null;
+  let bestD2 = Number.POSITIVE_INFINITY;
+  for (const fish of state.fish) {
+    if (!fish.alive || fish.ftueFleeing) continue;
+    if (fish.type === FishType.Large || fish.type === FishType.Boss || fish.type === FishType.Treasure) continue;
+    if (fish.x <= 32 || fish.x >= CANVAS_WIDTH - 32) continue;
+    if (fish.y <= CANVAS_HEIGHT * 0.16 || fish.y >= CANVAS_HEIGHT * 0.75) continue;
+    const dx = fish.x - FTUE_FISH_LESSON_TARGET_X;
+    const dy = fish.y - FTUE_FISH_LESSON_TARGET_Y;
+    const d2 = dx * dx + dy * dy;
+    if (d2 < bestD2) {
+      target = fish;
+      bestD2 = d2;
+    }
+  }
+  if (target == null) return false;
+  target.x = FTUE_FISH_LESSON_TARGET_X;
+  target.y = FTUE_FISH_LESSON_TARGET_Y;
+  target.vx = 0;
+  target.vy = 0;
+  target.wanderTimer = 9999;
+  target.ftueShowcase = true;
+  state.ftue.fishLessonTimer = 0;
+  return true;
+}
+
+function spawnFtueOxygenLessonFish(state: FullGameState): void {
+  if (state.ftue.oxygenLessonFishId != null) return;
+  const id = state.nextFishId++;
+  state.fish.push({
+    id,
+    x: FTUE_OXYGEN_LESSON_SPAWN_X,
+    y: FTUE_OXYGEN_LESSON_TARGET_Y,
+    vx: FTUE_OXYGEN_LESSON_SWIM_SPEED,
+    vy: 0,
+    wanderTimer: 9999,
+    age: 0,
+    hasAttacked: false,
+    type: FishType.Puffer,
+    alive: true,
+    hitFlash: 0,
+    ftueShowcase: true,
+  });
+  state.ftue.oxygenLessonFishId = id;
+}
+
+function updateFtueOxygenLessonFish(state: FullGameState, dt: number): void {
+  const fishId = state.ftue.oxygenLessonFishId;
+  if (fishId == null) return;
+  const fish = state.fish.find((current) => current.id === fishId && current.alive);
+  if (fish == null) {
+    state.ftue.oxygenLessonFishId = null;
+    state.ftue.prompt = null;
+    return;
+  }
+  if (state.ftue.prompt === 'oxygenLimit') {
+    fish.x = FTUE_OXYGEN_LESSON_TARGET_X;
+    fish.y = FTUE_OXYGEN_LESSON_TARGET_Y;
+    fish.vx = 0;
+    fish.vy = 0;
+    fish.wanderTimer = 9999;
+    return;
+  }
+  const nextX = Math.min(FTUE_OXYGEN_LESSON_TARGET_X, fish.x + FTUE_OXYGEN_LESSON_SWIM_SPEED * dt);
+  fish.x = nextX;
+  fish.y = FTUE_OXYGEN_LESSON_TARGET_Y;
+  fish.vx = FTUE_OXYGEN_LESSON_SWIM_SPEED;
+  fish.vy = 0;
+  fish.wanderTimer = 9999;
+  if (nextX >= FTUE_OXYGEN_LESSON_TARGET_X) {
+    fish.x = FTUE_OXYGEN_LESSON_TARGET_X;
+    fish.vx = 0;
+    state.ftue.prompt = 'oxygenLimit';
+  }
+}
+
 function getFtueTreasureIntroTotalSec(): number {
   return FTUE_TREASURE_PRE_ZOOM_HOLD_SEC
     + FTUE_TREASURE_ZOOM_IN_SEC
@@ -376,11 +482,58 @@ function getFtueTreasureFocusBlend(timer: number): number {
   return u * u * (3 - 2 * u);
 }
 
+function getFtueFishLessonCameraProgress(timer: number): number {
+  const inEnd = FTUE_FISH_LESSON_ZOOM_IN_SEC;
+  const holdEnd = inEnd + FTUE_FISH_LESSON_ZOOM_HOLD_SEC;
+  const outEnd = holdEnd + FTUE_FISH_LESSON_ZOOM_OUT_SEC;
+  let p = 0;
+  if (timer < inEnd) {
+    p = timer / Math.max(1e-6, FTUE_FISH_LESSON_ZOOM_IN_SEC);
+  } else if (timer < holdEnd) {
+    p = 1;
+  } else if (timer < outEnd) {
+    p = 1 - (timer - holdEnd) / Math.max(1e-6, FTUE_FISH_LESSON_ZOOM_OUT_SEC);
+  }
+  const u = Math.min(1, Math.max(0, p));
+  return u * u * (3 - 2 * u);
+}
+
+function getFtueFishLessonZoom(timer: number): number {
+  const p = getFtueFishLessonCameraProgress(timer);
+  return 1 + (FTUE_FISH_LESSON_ZOOM_MAX - 1) * p;
+}
+
+function getFtueFishLessonFocusBlend(timer: number): number {
+  return getFtueFishLessonCameraProgress(timer);
+}
+
+function getFtueConsumableZoom(timer: number): number {
+  const inEnd = FTUE_CONSUMABLE_ZOOM_IN_SEC;
+  const holdEnd = inEnd + FTUE_CONSUMABLE_ZOOM_HOLD_SEC;
+  const outEnd = holdEnd + FTUE_CONSUMABLE_ZOOM_OUT_SEC;
+  let p = 0;
+  if (timer < inEnd) {
+    p = timer / Math.max(1e-6, FTUE_CONSUMABLE_ZOOM_IN_SEC);
+  } else if (timer < holdEnd) {
+    p = 1;
+  } else if (timer < outEnd) {
+    p = 1 - (timer - holdEnd) / Math.max(1e-6, FTUE_CONSUMABLE_ZOOM_OUT_SEC);
+  }
+  const u = Math.min(1, Math.max(0, p));
+  const smooth = u * u * (3 - 2 * u);
+  return 1 + (FTUE_CONSUMABLE_ZOOM_MAX - 1) * smooth;
+}
+
 function markFtueConsumableUsed(state: FullGameState, id: 'net' | 'bait'): void {
   if (state.ftue.stage !== 'secondDiveConsumables') return;
-  if (id === 'net') state.ftue.usedNet = true;
-  if (id === 'bait') state.ftue.usedBait = true;
-  if (state.ftue.usedNet && state.ftue.usedBait) {
+  if (id === 'bait' && state.ftue.prompt === 'useBait') {
+    state.ftue.usedBait = true;
+    state.ftue.prompt = null;
+    state.ftue.consumableLessonTimer = 0;
+    return;
+  }
+  if (id === 'net' && state.ftue.prompt === 'useNet') {
+    state.ftue.usedNet = true;
     completeFtue(state);
   }
 }
@@ -396,13 +549,27 @@ export function applyTutorialSeenState(state: FullGameState, seen: Partial<Tutor
   state.tutorial.seen = { ...state.tutorial.seen, ...seen };
 }
 
+export function applyFtueOxygenLessonSeen(state: FullGameState, seen: boolean): void {
+  state.ftue.oxygenLessonShown = seen;
+}
+
 export function setLeaderboardEntries(
   state: FullGameState,
   entries: LeaderboardEntry[],
   bestFishCaught = state.leaderboard.bestFishCaught,
   lastSubmittedFishCaught = state.leaderboard.lastSubmittedFishCaught,
+  bestRunMoney = state.leaderboard.bestRunMoney,
+  bestRunFishCaught = state.leaderboard.bestRunFishCaught,
+  allTimeFishCaught = state.leaderboard.allTimeFishCaught,
 ): void {
-  state.leaderboard = { entries, bestFishCaught, lastSubmittedFishCaught };
+  state.leaderboard = {
+    entries,
+    bestFishCaught,
+    lastSubmittedFishCaught,
+    bestRunMoney,
+    bestRunFishCaught,
+    allTimeFishCaught,
+  };
 }
 
 function decayHudConsumableFlash(state: FullGameState, dt: number): void {
@@ -496,6 +663,9 @@ export function createInitialState(): FullGameState {
     leaderboard: {
       bestFishCaught: 0,
       lastSubmittedFishCaught: 0,
+      bestRunMoney: 0,
+      bestRunFishCaught: 0,
+      allTimeFishCaught: 0,
       entries: createFakeLeaderboardEntries(),
     },
   };
@@ -602,7 +772,8 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
           state.consumables.bait = Math.min(BAIT_MAX_STOCK, state.consumables.bait + 1);
           state.ftue.freeConsumablesGranted = true;
         }
-        state.ftue.prompt = 'useConsumables';
+        state.ftue.prompt = null;
+        state.ftue.consumableLessonTimer = 0;
       }
       playMenuToGameTransition(state);
       continue;
@@ -804,6 +975,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   if (state.oxygenDamageTimer > 0) {
     state.oxygenDamageTimer = Math.max(0, state.oxygenDamageTimer - dt);
   }
+  updateFtueOxygenLessonFish(state, dt);
 
   if (state.ftue.stage === 'sharkEncounter' && state.ftueActive) {
     if (!commands.some((command) => command.type === 'tap')) {
@@ -813,6 +985,54 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     state.ftue.prompt = null;
     state.fishSpawnTimer = 0.1;
     state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
+  }
+
+  if (state.ftue.stage === 'firstFishIntro') {
+    state.ftue.fishLessonTimer += dt;
+    if (
+      state.ftue.fishLessonTimer >= FTUE_FISH_LESSON_SPAWN_SEC
+      && markExistingFtueFishLessonTarget(state)
+    ) {
+      state.ftue.stage = 'firstFishCatch';
+      state.ftue.prompt = 'catchFish';
+      state.treasureSpawnTimer = 8_000_000_000_000;
+      state.bossSpawnTimer = 8_000_000_000_000;
+    }
+  }
+
+  if (state.ftue.stage === 'firstFishCatch') {
+    state.ftue.fishLessonTimer += dt;
+  }
+  const hadFtueConsumablePromptAtFrameStart = state.ftue.stage === 'secondDiveConsumables'
+    && (state.ftue.prompt === 'useBait' || state.ftue.prompt === 'useNet');
+  if (
+    state.ftue.stage === 'secondDiveConsumables'
+  ) {
+    state.ftue.consumableLessonTimer += dt;
+    if (!state.ftue.usedBait && state.ftue.prompt == null) {
+      if (state.ftue.consumableLessonTimer >= FTUE_CONSUMABLE_BAIT_PROMPT_DELAY_SEC) {
+        state.ftue.prompt = 'useBait';
+        state.ftue.consumableLessonTimer = 0;
+      }
+    } else if (state.ftue.usedBait && !state.ftue.usedNet && state.ftue.prompt == null) {
+      if (state.ftue.consumableLessonTimer >= FTUE_CONSUMABLE_NET_PROMPT_DELAY_SEC) {
+        state.ftue.prompt = 'useNet';
+        state.ftue.consumableLessonTimer = 0;
+      }
+    }
+  }
+
+  if (state.ftue.stage === 'firstFishCaught') {
+    state.ftue.fishLessonCatchWaitTimer += dt;
+    if (state.ftue.fishLessonCatchWaitTimer >= FTUE_FISH_LESSON_WAIT_AFTER_CATCH_SEC) {
+      state.ftue.stage = 'firstTreasureIntro';
+      state.ftue.prompt = null;
+      state.ftue.treasureIntroTimer = 0;
+      state.fish = state.fish.filter((fish) => !fish.ftueShowcase && !fish.ftueFleeing);
+      state.fishSpawnTimer = 8_000_000_000_000;
+      state.bossSpawnTimer = 8_000_000_000_000;
+      spawnFtueTreasureChest(state);
+    }
   }
 
   if (state.ftue.stage === 'firstTreasureIntro') {
@@ -843,16 +1063,48 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
 
   const canShoot = state.player.shootCooldown <= 0 && state.spears.length === 0;
   const ftueTreasurePaused = state.ftue.stage === 'firstTreasureCatch';
+  const ftueFishLessonPaused = state.ftue.stage === 'firstFishCatch';
+  const ftueConsumablePaused = hadFtueConsumablePromptAtFrameStart;
+  const ftueOxygenLessonPaused = state.ftue.oxygenLessonFishId != null;
+  const timeLeftFraction = state.roundTimeMax > 0 ? state.roundTimeLeft / state.roundTimeMax : 0;
+  if (
+    !state.ftue.oxygenLessonShown
+    && state.ftue.prompt == null
+    && state.ftue.stage !== 'firstFishIntro'
+    && state.ftue.stage !== 'firstFishCatch'
+    && state.ftue.stage !== 'firstTreasureIntro'
+    && state.ftue.stage !== 'firstTreasureCatch'
+    && state.ftue.stage !== 'secondDiveConsumables'
+    && timeLeftFraction <= FTUE_OXYGEN_LESSON_THRESHOLD
+    && state.roundTimeLeft > 0
+  ) {
+    state.ftue.oxygenLessonShown = true;
+    state.ftue.oxygenLessonTimer = 0;
+    state.ftue.prompt = null;
+    spawnFtueOxygenLessonFish(state);
+    state.pendingEvents.push({ type: 'ftueOxygenLessonShown' });
+  }
 
   for (const command of commands) {
     // Consumable use
     if (command.type === 'useConsumable') {
+      if (
+        state.ftue.stage === 'secondDiveConsumables'
+        && (
+          state.ftue.prompt == null
+          ||
+          (state.ftue.prompt === 'useBait' && command.id !== 'bait')
+          || (state.ftue.prompt === 'useNet' && command.id !== 'net')
+        )
+      ) {
+        continue;
+      }
       triggerTutorialHint(state, 'gear');
       if (command.id === 'net' && state.consumables.net > 0 && state.netVfx == null) {
         state.consumables.net -= 1;
         state.netVfx = { elapsed: 0, catchesApplied: false };
         state.hudConsumableFlash.net = 0.34;
-          markFtueConsumableUsed(state, 'net');
+        markFtueConsumableUsed(state, 'net');
       } else if (command.id === 'bait' && state.consumables.bait > 0) {
         state.consumables.bait -= 1;
         state.baitActive = true;
@@ -901,16 +1153,24 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     }
 
     if (command.type !== 'tap') continue;
+    if (state.ftue.oxygenLessonFishId != null && state.ftue.prompt !== 'oxygenLimit') continue;
 
-    const w = canvasToActionWorld(
-      command.x,
-      command.y,
-      state.shakeX,
-      state.shakeY,
-      state.player.x,
-      state.player.y,
-      getActionViewZoomForSession(state.sessionTime, state.ftueActive),
-    );
+    const ftueFishTarget = state.ftue.stage === 'firstFishCatch'
+      ? state.fish.find((fish) => fish.alive && fish.ftueShowcase)
+      : state.ftue.prompt === 'oxygenLimit' && state.ftue.oxygenLessonFishId != null
+        ? state.fish.find((fish) => fish.id === state.ftue.oxygenLessonFishId && fish.alive)
+        : null;
+    const w = ftueFishTarget != null
+      ? { x: ftueFishTarget.x, y: ftueFishTarget.y }
+      : canvasToActionWorld(
+        command.x,
+        command.y,
+        state.shakeX,
+        state.shakeY,
+        state.player.x,
+        state.player.y,
+        getActionViewZoomForSession(state.sessionTime, state.ftueActive),
+      );
     const grip = getHarpoonGripWorld(state.player.x, state.player.y);
     const dx = w.x - grip.x;
     const dy = w.y - grip.y;
@@ -934,11 +1194,15 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     break;
   }
 
+  if (ftueConsumablePaused) {
+    return ACTION_PAUSED;
+  }
+
   if (state.player.shootCooldown > 0) {
     state.player.shootCooldown = Math.max(0, state.player.shootCooldown - dt);
   }
 
-  if (!ftueTreasurePaused) {
+  if (!ftueTreasurePaused && !ftueFishLessonPaused && !ftueConsumablePaused && !ftueOxygenLessonPaused) {
   if (state.comboTimer > 0) {
     state.comboTimer = Math.max(0, state.comboTimer - dt);
     if (state.comboTimer === 0) {
@@ -978,10 +1242,11 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
             ? 0
             : Math.min(n, Math.max(1, Math.round(n * WAVE_NEAR_SPAWN_FRACTION)));
         let sharksAlive = countAliveFish(state.fish, FishType.Large);
+        const avoidRandomShark = isFtueFlowActive(state);
         for (let u = 0; u < nearN; u += 1) {
           const fish = spawnFish(state.nextFishId++, rng, state.sessionTime, {
             spawnInward: true,
-            avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+            avoidShark: avoidRandomShark || sharksAlive >= SHARK_MAX_ALIVE,
           });
           if (fish.type === FishType.Large) sharksAlive += 1;
           state.fish.push(fish);
@@ -989,7 +1254,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         for (let v = 0; v < n - nearN; v += 1) {
           const fish = spawnFish(state.nextFishId++, rng, state.sessionTime, {
             spawnInward: false,
-            avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+            avoidShark: avoidRandomShark || sharksAlive >= SHARK_MAX_ALIVE,
           });
           if (fish.type === FishType.Large) sharksAlive += 1;
           state.fish.push(fish);
@@ -1011,7 +1276,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     if (liveFish < FISH_SPAWN_MAX_ALIVE) {
       const sharksAlive = countAliveFish(state.fish, FishType.Large);
       state.fish.push(spawnFish(state.nextFishId++, rng, state.sessionTime, {
-        avoidShark: sharksAlive >= SHARK_MAX_ALIVE,
+        avoidShark: isFtueFlowActive(state) || sharksAlive >= SHARK_MAX_ALIVE,
       }));
     }
     state.fishSpawnTimer = getModulatedSpawnInterval(state.sessionTime) * waveIntScale;
@@ -1205,7 +1470,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
         getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
         * getHaulMultiplier(state.upgrades),
       );
-      attachCatchToSpear(spear, fish.type, catchValue);
+      attachCatchToSpear(spear, fish.type, catchValue, fish.ftueShowcase === true);
       emitHookImpactFX(state.particles, fish.x, fish.y, fish.type, rng);
       state.shakeIntensity += SHAKE_ON_HOOK * 1.35;
       state.pendingEvents.push({
@@ -1279,7 +1544,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       getFishValue(fish.type, state.sessionTime, getValueMultiplier(state.upgrades), rng)
       * getHaulMultiplier(state.upgrades),
     );
-    attachCatchToSpear(spear, fish.type, catchValue);
+    attachCatchToSpear(spear, fish.type, catchValue, fish.ftueShowcase === true);
     emitHookImpactFX(state.particles, fish.x, fish.y, fish.type, rng);
     state.shakeIntensity += SHAKE_ON_HOOK;
     state.pendingEvents.push({
@@ -1333,6 +1598,15 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       state.roundTimeLeft = Math.min(state.roundTimeMax, state.roundTimeLeft + PUFFER_TIME_BONUS);
       state.oxyBoostTimer = 1.8;
     }
+    if (
+      catchResult.fishType === FishType.Puffer
+      && catchResult.ftueShowcase
+      && state.ftue.oxygenLessonFishId != null
+    ) {
+      state.ftue.oxygenLessonFishId = null;
+      state.ftue.prompt = null;
+      state.ftue.oxygenLessonTimer = 0;
+    }
 
     emitCatchPayoffFX(state.particles, catchResult.x, catchResult.y, catchResult.fishType, totalReward, rng);
     spawnCatchCoinBurst(state, catchResult.x, catchResult.y - 8, totalReward);
@@ -1368,15 +1642,27 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
       value: totalReward,
       fishType: catchResult.fishType,
     });
+    if (state.ftue.stage === 'firstFishCatch' && catchResult.ftueShowcase) {
+      state.ftue.stage = 'firstFishCaught';
+      state.ftue.prompt = null;
+      state.ftue.fishLessonCatchWaitTimer = 0;
+      state.comboCount = 0;
+      state.comboTimer = 0;
+      state.fishSpawnTimer = 0.1;
+      state.treasureSpawnTimer = 8_000_000_000_000;
+      state.bossSpawnTimer = BOSS_SPAWN_FIRST_DELAY;
+      continue;
+    }
     if (state.ftue.stage === 'sharkEncounter' && catchResult.fishType === FishType.Large) {
-      state.ftue.stage = 'firstTreasureIntro';
+      state.ftue.stage = 'firstFishIntro';
       state.ftue.prompt = null;
       state.ftueActive = false;
       state.comboCount = 0;
       state.comboTimer = 0;
-      state.ftue.treasureIntroTimer = 0;
+      state.ftue.fishLessonTimer = 0;
       state.fishSpawnTimer = 0.1;
-      state.treasureSpawnTimer = FTUE_TREASURE_SPAWN_DELAY_SEC;
+      state.treasureSpawnTimer = 8_000_000_000_000;
+      state.bossSpawnTimer = 8_000_000_000_000;
     }
   }
 
@@ -1542,25 +1828,42 @@ export function getRenderState(state: FullGameState): RenderState {
         angle: spear.fireAngle,   // never flips on return
         carryingFishType: spear.caughtFishType,
         carryingFishScale,
+        carryingFtueShowcase: spear.caughtFishWasFtueShowcase,
       };
     }),
     fish: buildFishRenderState(state),
     ftueHandTarget: (() => {
       if (
         state.ftue.prompt !== 'tapFightBack'
+        && state.ftue.prompt !== 'catchFish'
         && state.ftue.prompt !== 'treasureIntro'
         && state.ftue.prompt !== 'catchTreasure'
+        && state.ftue.prompt !== 'oxygenLimit'
       ) return null;
-      const targetType = state.ftue.prompt === 'tapFightBack' ? FishType.Large : FishType.Treasure;
-      const target = state.fish.find((fish) => fish.alive && fish.type === targetType);
+      const target = state.ftue.prompt === 'tapFightBack'
+        ? state.fish.find((fish) => fish.alive && fish.type === FishType.Large)
+        : state.ftue.prompt === 'catchFish'
+          ? state.fish.find((fish) => fish.alive && fish.ftueShowcase)
+            ?? state.spears.find((spear) => spear.caughtFishWasFtueShowcase)
+          : state.ftue.prompt === 'oxygenLimit' && state.ftue.oxygenLessonFishId != null
+            ? state.fish.find((fish) => fish.id === state.ftue.oxygenLessonFishId && fish.alive)
+              ?? state.spears.find((spear) => spear.caughtFishWasFtueShowcase)
+          : state.fish.find((fish) => fish.alive && fish.type === FishType.Treasure);
       return target == null ? null : { x: target.x, y: target.y };
     })(),
     ftueTreasureZoom: state.ftue.prompt === 'treasureIntro'
       ? getFtueTreasureZoom(state.ftue.treasureIntroTimer)
-      : 1,
+      : state.ftue.prompt === 'catchFish'
+        ? getFtueFishLessonZoom(state.ftue.fishLessonTimer)
+        : 1,
     ftueTreasureFocusBlend: state.ftue.prompt === 'treasureIntro'
       ? getFtueTreasureFocusBlend(state.ftue.treasureIntroTimer)
-      : 0,
+      : state.ftue.prompt === 'catchFish'
+        ? getFtueFishLessonFocusBlend(state.ftue.fishLessonTimer)
+        : 0,
+    ftueConsumableZoom: state.ftue.prompt === 'useBait' || state.ftue.prompt === 'useNet'
+      ? getFtueConsumableZoom(state.ftue.consumableLessonTimer)
+      : 1,
     particles: [...state.particles],
     floatingTexts: [...state.floatingTexts],
     catchCoinBursts: state.catchCoinBursts.map((burst) => ({ ...burst })),

@@ -312,9 +312,41 @@ function ftueClickPressT(): number {
 const FTUE_CLICK_DIP_PX = 9;
 
 function drawFtueHandWorld(renderer: GameRenderer, state: RenderState): void {
-  const target = state.ftuePrompt === 'catchTreasure'
-    ? state.fish.find((fish) => fish.type === FishType.Treasure)
-    : state.fish[0];
+  const target = (() => {
+    const ftueSpear = state.spears.find((spear) => spear.carryingFtueShowcase && spear.carryingFishType !== null);
+    if (ftueSpear != null) {
+      return {
+        x: ftueSpear.x - Math.cos(ftueSpear.angle) * 28,
+        y: ftueSpear.y - Math.sin(ftueSpear.angle) * 28,
+        type: ftueSpear.carryingFishType!,
+        drawScale: ftueSpear.carryingFishScale,
+        hitFlash: 0,
+        facingLeft: Math.cos(ftueSpear.angle) >= 0,
+        rotation: 0,
+        isAggressive: false,
+        attackProgress: 0,
+        isFleeing: false,
+      } satisfies RenderFishState;
+    }
+    if (state.ftueHandTarget != null) {
+      let best: RenderFishState | null = null;
+      let bestD2 = Number.POSITIVE_INFINITY;
+      for (const fish of state.fish) {
+        const dx = fish.x - state.ftueHandTarget.x;
+        const dy = fish.y - state.ftueHandTarget.y;
+        const d2 = dx * dx + dy * dy;
+        if (d2 < bestD2) {
+          best = fish;
+          bestD2 = d2;
+        }
+      }
+      if (best != null) return best;
+    }
+    if (state.ftuePrompt === 'catchTreasure') {
+      return state.fish.find((fish) => fish.type === FishType.Treasure);
+    }
+    return state.fish[0];
+  })();
   if (target == null) return;
   const s = target.drawScale ?? 1;
   const fishW = FISH_DRAW_WIDTH[target.type] * s;
@@ -348,24 +380,48 @@ function getFtueCtaCopy(state: RenderState): { title: string; body: string } {
   if (state.ftuePrompt === 'treasureIntro') {
     return {
       title: 'TREASURE',
-      body: 'TAP',
+      body: 'WHAT IS INSIDE?',
     };
   }
   if (state.ftuePrompt === 'catchTreasure') {
     return {
-      title: 'HOOK THE TREASURE',
-      body: '',
+      title: 'TREASURE',
+      body: 'WHAT IS INSIDE?',
+    };
+  }
+  if (state.ftuePrompt === 'catchFish') {
+    return {
+      title: 'TAP FISH TO CATCH',
+      body: 'AIM AND FIRE TO REEL',
     };
   }
   if (state.ftuePrompt === 'useConsumables') {
     return {
       title: 'USE YOUR FREE GEAR',
-      body: 'Tap bait and net to try each consumable.',
+      body: 'TAP BAIT AND NET TO TRY EACH CONSUMABLE.',
+    };
+  }
+  if (state.ftuePrompt === 'useBait') {
+    return {
+      title: 'USE BAIT',
+      body: 'TAP BAIT TO LURE FISH',
+    };
+  }
+  if (state.ftuePrompt === 'useNet') {
+    return {
+      title: 'USE NET',
+      body: 'USE NET FOR MASS CATCH',
+    };
+  }
+  if (state.ftuePrompt === 'oxygenLimit') {
+    return {
+      title: 'OXYGEN',
+      body: '+O2 FISH RESTORES OXYGEN',
     };
   }
   return {
     title: 'CATCH FISH · CASH IN',
-    body: 'One tap, full run. Get paid on every catch.',
+    body: 'ONE TAP, FULL RUN. GET PAID ON EVERY CATCH.',
   };
 }
 
@@ -376,7 +432,11 @@ function drawFtueCtaOnly(renderer: GameRenderer, state: RenderState): void {
   const isFightBack = state.ftuePrompt === 'tapFightBack';
   const useFightBackPlacement = isFightBack
     || state.ftuePrompt === 'catchTreasure'
-    || state.ftuePrompt === 'useConsumables';
+    || state.ftuePrompt === 'catchFish'
+    || state.ftuePrompt === 'useConsumables'
+    || state.ftuePrompt === 'useBait'
+    || state.ftuePrompt === 'useNet'
+    || state.ftuePrompt === 'oxygenLimit';
   const isTreasure = state.ftuePrompt === 'treasureIntro' || state.ftuePrompt === 'catchTreasure';
   const bottomPad = useFightBackPlacement ? 210 : 24;
   const subH = useFightBackPlacement ? 52 : 40;
@@ -385,9 +445,9 @@ function drawFtueCtaOnly(renderer: GameRenderer, state: RenderState): void {
   const headGap = useFightBackPlacement ? 4 : 8;
   const headY = subY - headGap - headH;
   const bandH = useFightBackPlacement ? 300 : 200;
-  const bodyStyle = isFightBack ? tb(30, C.teal, 'center') : t(isTreasure ? 22 : 15, C.teal, 'center', '800');
+  const bodyStyle = useFightBackPlacement || isTreasure ? tb(30, C.teal, 'center') : t(22, C.teal, 'center', '800');
   renderer.drawGradientRect('rgba(1,3,6,0)', 'rgba(1,3,6,0.52)', 0, H - bandH, W, bandH);
-  renderer.drawText(copy.title, 0, headY, W, headH, td(isTreasure ? 46 : 42, C.white, 'center'));
+  if (copy.title !== '') renderer.drawText(copy.title, 0, headY, W, headH, td(isTreasure ? 46 : 42, C.white, 'center'));
   if (copy.body !== '') renderer.drawText(copy.body, 0, subY, W, subH, bodyStyle);
 }
 
@@ -620,7 +680,9 @@ function drawDiverCharacter(renderer: GameRenderer, yOffset = 0): void {
 function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState): void {
   const actionZoomed = state.phase === GamePhase.Action || state.phase === GamePhase.Breaching;
   const isFtue = state.phase === GamePhase.Action && state.ftueActive;
-  const treasureFocus = state.ftuePrompt === 'treasureIntro' ? state.ftueHandTarget : null;
+  const treasureFocus = state.ftuePrompt === 'treasureIntro' || state.ftuePrompt === 'catchFish'
+    ? state.ftueHandTarget
+    : null;
   const playerFocus = actionViewFocus(state.player.x, state.player.y);
   const focusBlend = treasureFocus == null ? 0 : state.ftueTreasureFocusBlend;
   const activeFocus = treasureFocus == null
@@ -685,7 +747,7 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   for (const fish of state.fish) {
     if (fish.type !== FishType.Boss) drawFish(renderer, fish);
   }
-  if (isFtue || state.ftuePrompt === 'catchTreasure') {
+  if (isFtue || state.ftuePrompt === 'catchTreasure' || state.ftuePrompt === 'catchFish' || state.ftuePrompt === 'oxygenLimit') {
     drawFtueHandWorld(renderer, state);
   }
 
@@ -844,18 +906,24 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
   if (alpha <= 0.004) return;
 
   const w = CANVAS_WIDTH - 72;
-  const h = 470;
+  const h = 490;
   const x = (CANVAS_WIDTH - w) / 2;
-  const y = (CANVAS_HEIGHT - h) / 2;
+  const y = Math.round(CANVAS_HEIGHT * 0.405);
   renderer.pushOpacity(alpha);
   renderer.drawRectAlpha(C.bg, 0.52, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
+
+  const logoW = Math.min(390, CANVAS_WIDTH - 34);
+  const logoH = logoW / 1.58;
+  renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, CANVAS_HEIGHT * 0.13, logoW, logoH);
+
   renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
   renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);
-  renderer.drawText('DIVE COMPLETE', x, y + 24, w, 30, t(17, C.muted, 'center', '800'));
-  renderer.drawText(`${state.sessionCatchCount} FISH CAUGHT`, x, y + 58, w, 44, tb(31, C.gold, 'center'));
-  renderer.drawText(`+$${state.sessionEarnings}`, x, y + 100, w, 32, tb(23, C.white, 'center'));
 
-  const listY = y + 176;
+  renderer.drawText('DIVE COMPLETE', x, y + 26, w, 30, t(17, C.muted, 'center', '800'));
+  renderer.drawText(`${state.sessionCatchCount} FISH CAUGHT`, x, y + 62, w, 44, tb(31, C.gold, 'center'));
+  renderer.drawText(`+$${state.sessionEarnings}`, x, y + 112, w, 32, tb(23, C.white, 'center'));
+
+  const listY = y + 204;
   renderer.drawText('LEADERBOARD', x + 24, listY - 34, w - 48, 24, t(17, C.teal, 'left', '800'));
   const rows = state.leaderboard.entries
     .map((entry) => entry.isPlayer
@@ -898,8 +966,12 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
     state.phase === GamePhase.Action
     && (
       state.ftueActive
+      || state.ftuePrompt === 'catchFish'
       || state.ftuePrompt === 'catchTreasure'
       || state.ftuePrompt === 'useConsumables'
+      || state.ftuePrompt === 'useBait'
+      || state.ftuePrompt === 'useNet'
+      || state.ftuePrompt === 'oxygenLimit'
     )
   ) {
     drawFtueCtaOnly(renderer, state);

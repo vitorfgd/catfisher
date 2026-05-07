@@ -25,6 +25,37 @@ const OXYGEN_TANK_X = 14;
 const OXYGEN_TANK_Y = Math.round(CANVAS_HEIGHT * 0.39);
 const OXYGEN_TANK_W = 54;
 const OXYGEN_TANK_H = 188;
+const DEBUG_SHOW_GAMEPLAY_MESSAGES = false;
+const FTUE_HAND_PX = 72;
+const FTUE_HAND_TIP_X_FR = 0.88;
+const FTUE_HAND_TIP_Y_FR = 0.5;
+const FTUE_CLICK_DIP_PX = 8;
+
+function ftueClickPressT(): number {
+  const phase = (Date.now() / 1000) % 0.86;
+  if (phase < 0.16) return phase / 0.16;
+  if (phase < 0.26) return 1 - (phase - 0.16) / 0.10;
+  return 0;
+}
+
+function getFtueConsumableTarget(prompt: RenderState['ftuePrompt']): 'bait' | 'net' | null {
+  if (prompt === 'useBait') return 'bait';
+  if (prompt === 'useNet') return 'net';
+  return null;
+}
+
+function drawFtueConsumableHand(renderer: GameRenderer, target: 'bait' | 'net'): void {
+  const cx = target === 'bait' ? HUD_BAIT_BUTTON_CX : HUD_NET_BUTTON_CX;
+  const cy = HUD_CONSUMABLE_BUTTON_Y;
+  const press = ftueClickPressT();
+  const tipX = cx;
+  const tipY = cy + press * FTUE_CLICK_DIP_PX;
+  const drawL = tipX - FTUE_HAND_TIP_X_FR * FTUE_HAND_PX;
+  const drawT = tipY - FTUE_HAND_TIP_Y_FR * FTUE_HAND_PX;
+  renderer.pushRotate(30, tipX, tipY);
+  renderer.drawImage({ id: AssetIds.ftueHand }, drawL, drawT, FTUE_HAND_PX, FTUE_HAND_PX);
+  renderer.pop();
+}
 
 export function getHudMoneyLayout(moneyDigits: string): {
   mW: number;
@@ -127,14 +158,21 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     { id: 'bait', cx: HUD_BAIT_BUTTON_CX, stock: state.consumables.bait },
     { id: 'net', cx: HUD_NET_BUTTON_CX, stock: state.consumables.net },
   ];
+  const ftueConsumableTarget = getFtueConsumableTarget(state.ftuePrompt);
+  const hideConsumablesBeforeFtue = state.ftueStage === 'secondDiveConsumables' && ftueConsumableTarget == null;
   for (const btn of btns) {
+    if (hideConsumablesBeforeFtue) continue;
+    if (ftueConsumableTarget !== null && btn.id !== ftueConsumableTarget) continue;
     if (btn.stock <= 0) continue;
     const flash = btn.id === 'net' ? state.hudConsumableFlash.net : state.hudConsumableFlash.bait;
     const flashPulse = flash > 0 ? flash / 0.34 : 0;
     const btnPulse = btn.id === 'bait' && state.baitActive ? 0.5 + 0.5 * Math.sin(Date.now() / 220) : 0;
-    const ftuePulse = state.ftuePrompt === 'useConsumables' ? 0.5 + 0.5 * Math.sin(Date.now() / 180) : 0;
+    const isFtueConsumable = ftueConsumableTarget === btn.id || state.ftuePrompt === 'useConsumables';
+    const ftuePulse = isFtueConsumable ? 0.5 + 0.5 * Math.sin(Date.now() / 180) : 0;
     const ringBoost = 10 + flashPulse * 22;
     const alphaBoost = flashPulse * 0.35;
+    const zoom = ftueConsumableTarget === btn.id ? state.ftueConsumableZoom : 1;
+    renderer.pushScale(zoom, zoom, btn.cx, HUD_CONSUMABLE_BUTTON_Y);
     renderer.drawEllipseAlpha(
       C.amber,
       0.15 + btnPulse * 0.30 + alphaBoost + ftuePulse * 0.22,
@@ -163,23 +201,27 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
       14,
       t(11, C.bg, 'center', '800'),
     );
+    renderer.pop();
   }
+  if (ftueConsumableTarget !== null) drawFtueConsumableHand(renderer, ftueConsumableTarget);
 
   const hudCenterX = W * 0.5;
   const stackGap = 8;
   const lowTimeTop = mY + pillH + 6;
   const statusTop = lowTimeTop + 36 + stackGap;
   const comboTop = statusTop + 64 + stackGap;
-  const comboFontSize = state.comboCount >= 10 ? 88 : state.comboCount >= 5 ? 68 : 52;
+  const debugComboCount = 5;
+  const displayComboCount = state.comboActive ? state.comboCount : debugComboCount;
+  const comboFontSize = displayComboCount >= 10 ? 88 : displayComboCount >= 5 ? 68 : 52;
   const comboH = comboFontSize + 16;
   const timeBonusFontSize = 42;
   const timeBonusH = timeBonusFontSize + 16;
   const timeBonusTop = comboTop + comboH + stackGap;
 
-  if (state.comboActive) {
-    const combo = state.comboCount;
+  if (state.comboActive || DEBUG_SHOW_GAMEPLAY_MESSAGES) {
+    const combo = displayComboCount;
     const pulse = Math.sin(Date.now() / 200);
-    const alpha = (0.82 + 0.18 * pulse).toFixed(2);
+    const alpha = ((state.comboActive ? 0.82 : 0.48) + 0.18 * pulse).toFixed(2);
     const color = `rgba(0,212,168,${alpha})`;
     const fontSize = comboFontSize;
     const boxW = combo >= 10 ? 360 : combo >= 5 ? 310 : 270;
@@ -192,21 +234,27 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     renderer.drawText(`x${combo} COMBO`, cx - boxW / 2, cy - fontSize / 2 - 8, boxW, fontSize + 16, td(fontSize, color, 'center'));
   }
 
-  if (state.oxyBoostActive) {
+  if (state.oxyBoostActive || DEBUG_SHOW_GAMEPLAY_MESSAGES) {
     const p = Math.sin(Date.now() / 190);
-    const alpha = (0.85 + 0.15 * p).toFixed(2);
+    const alpha = ((state.oxyBoostActive ? 0.85 : 0.46) + 0.15 * p).toFixed(2);
     const glow = `rgba(80,220,255,${alpha})`;
     const cx = hudCenterX;
     const cy = timeBonusTop + timeBonusH / 2;
     renderer.drawText(`+${PUFFER_TIME_BONUS}s O2`, cx - 190, cy - timeBonusH / 2, 380, timeBonusH, td(timeBonusFontSize, glow, 'center'));
   }
 
-  if (state.harpoonStatus === 'LOAD' || state.harpoonStatus === 'REEL' || state.harpoonStatus === 'HAUL') {
+  if (
+    state.harpoonStatus === 'LOAD'
+    || state.harpoonStatus === 'REEL'
+    || state.harpoonStatus === 'HAUL'
+    || DEBUG_SHOW_GAMEPLAY_MESSAGES
+  ) {
     const p = Math.sin(Date.now() / 180);
     const isLoad = state.harpoonStatus === 'LOAD';
     const isReel = state.harpoonStatus === 'REEL';
-    const label = isLoad ? 'RELOADING' : isReel ? 'REELING' : 'HAULING';
-    const alpha = (0.76 + 0.18 * p).toFixed(2);
+    const isHaul = state.harpoonStatus === 'HAUL';
+    const label = isLoad ? 'RELOADING' : isReel ? 'REELING' : isHaul ? 'HAULING' : 'RELOADING';
+    const alpha = ((isLoad || isReel || isHaul ? 0.76 : 0.42) + 0.18 * p).toFixed(2);
     const color = isLoad || isReel
       ? `rgba(112,192,232,${alpha})`
       : `rgba(255,208,64,${alpha})`;
@@ -216,17 +264,26 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     renderer.drawText(label, cx - 180, cy - 32, 360, 64, td(52, color, 'center'));
   }
 
-  if (state.timeLeftFraction < 0.30) {
+  if ((state.timeLeftFraction < 0.30 || DEBUG_SHOW_GAMEPLAY_MESSAGES) && state.ftuePrompt !== 'oxygenLimit') {
     const urgency = state.timeLeftFraction < 0.12 ? 1 : 0;
     const blink = urgency ? (Math.floor(Date.now() / 200) % 2 === 0 ? 1.0 : 0.0) : (0.7 + 0.3 * Math.sin(Date.now() / 280));
     const label = urgency ? 'OUT OF AIR' : 'LOW O2';
+    const debugDim = state.timeLeftFraction < 0.30 ? 1 : 0.58;
+    const fontSize = urgency ? 52 : 42;
+    const warningW = urgency ? 390 : 300;
+    const warningH = fontSize + 18;
+    const warningX = hudCenterX - warningW / 2;
+    const warningCenterY = timeBonusTop + timeBonusH + stackGap + warningH / 2;
+    const warningY = warningCenterY - warningH / 2;
+    const color = urgency ? '255,68,68' : '255,176,48';
+    renderer.drawEllipseAlpha(`rgba(${color},${((0.07 + blink * 0.07) * debugDim).toFixed(2)})`, 1, hudCenterX, warningCenterY, warningW * 0.55, warningH * 0.72);
     renderer.drawText(
       label,
-      0,
-      lowTimeTop,
-      W,
-      36,
-      { ...tb(urgency ? 22 : 18, `rgba(${urgency ? '255,68,68' : '255,176,48'},${blink.toFixed(2)})`, 'center'), strokeColor: 'rgba(3,10,16,0.9)', strokeWidth: 3 },
+      warningX,
+      warningY,
+      warningW,
+      warningH,
+      { ...td(fontSize, `rgba(${color},${(blink * debugDim).toFixed(2)})`, 'center'), strokeColor: 'rgba(3,10,16,0.92)', strokeWidth: 5 },
     );
   }
 

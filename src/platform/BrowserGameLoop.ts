@@ -4,7 +4,7 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
-import { markFtueDiveCompleteInStorage } from './FtueStorage';
+import { markFtueDiveCompleteInStorage, markFtueOxygenLessonSeenInStorage } from './FtueStorage';
 import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
 import { renderFrame } from '../render/RenderFrame';
@@ -52,17 +52,24 @@ export class BrowserGameLoop {
         markFtueDiveCompleteInStorage();
         continue;
       }
+      if (event.type === 'ftueOxygenLessonShown') {
+        markFtueOxygenLessonSeenInStorage();
+        continue;
+      }
       if (event.type === 'tutorialHintShown') {
         markTutorialHintSeen(event.id);
         continue;
       }
       if (event.type === 'runEnded') {
-        const snapshot = this.leaderboard.submitFishCaught(event.catchCount);
+        const snapshot = this.leaderboard.submitFishCaught(event.catchCount, event.earnings);
         setLeaderboardEntries(
           this.state,
           snapshot.entries,
           snapshot.bestFishCaught,
           snapshot.lastSubmittedFishCaught,
+          snapshot.bestRunMoney,
+          snapshot.bestRunFishCaught,
+          snapshot.allTimeFishCaught,
         );
       }
       this.audio.handleEvent(event);

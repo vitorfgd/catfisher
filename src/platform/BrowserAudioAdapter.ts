@@ -7,10 +7,33 @@ import type { AudioAdapter } from './GameEvents';
 
 export class BrowserAudioAdapter implements AudioAdapter {
   private ctx: AudioContext | null = null;
+  private readonly backgroundMusic: HTMLAudioElement | null;
+  private backgroundMusicStarted = false;
+
+  constructor(backgroundMusicSrc?: string) {
+    this.backgroundMusic = backgroundMusicSrc != null ? new Audio(backgroundMusicSrc) : null;
+    if (this.backgroundMusic != null) {
+      this.backgroundMusic.loop = true;
+      this.backgroundMusic.volume = 0.12;
+      this.backgroundMusic.preload = 'auto';
+      const startOnInteraction = (): void => this.startBackgroundMusic();
+      window.addEventListener('pointerdown', startOnInteraction, { once: true, passive: true });
+      window.addEventListener('keydown', startOnInteraction, { once: true });
+    }
+  }
 
   private getCtx(): AudioContext {
     if (!this.ctx) this.ctx = new AudioContext();
     return this.ctx;
+  }
+
+  private startBackgroundMusic(): void {
+    if (this.backgroundMusic == null || this.backgroundMusicStarted) return;
+    this.backgroundMusicStarted = true;
+    void this.backgroundMusic.play().catch(() => {
+      // Browsers can block playback until a user gesture; retry on the next event.
+      this.backgroundMusicStarted = false;
+    });
   }
 
   private playTone(
@@ -37,6 +60,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
   }
 
   handleEvent(event: GameEvent): void {
+    this.startBackgroundMusic();
     switch (event.type) {
       case 'fishHooked': {
         const freq = event.fishType === FishType.Rare

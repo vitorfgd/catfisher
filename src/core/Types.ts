@@ -51,6 +51,9 @@ export interface ConsumableState {
 export type FtueStage =
   | 'none'
   | 'sharkEncounter'
+  | 'firstFishIntro'
+  | 'firstFishCatch'
+  | 'firstFishCaught'
   | 'firstTreasureIntro'
   | 'firstTreasureCatch'
   | 'treasureUpgrade'
@@ -59,15 +62,25 @@ export type FtueStage =
 
 export type FtuePromptId =
   | 'tapFightBack'
+  | 'catchFish'
   | 'treasureIntro'
   | 'catchTreasure'
+  | 'oxygenLimit'
   | 'upgradeHarpoon'
-  | 'useConsumables';
+  | 'useConsumables'
+  | 'useBait'
+  | 'useNet';
 
 export interface FtueRuntimeState {
   stage: FtueStage;
   prompt: FtuePromptId | null;
   treasureIntroTimer: number;
+  fishLessonTimer: number;
+  fishLessonCatchWaitTimer: number;
+  consumableLessonTimer: number;
+  oxygenLessonShown: boolean;
+  oxygenLessonTimer: number;
+  oxygenLessonFishId: number | null;
   freeConsumablesGranted: boolean;
   usedNet: boolean;
   usedBait: boolean;
@@ -91,6 +104,8 @@ export interface SpearState {
   maxDistance: number;
   mode: SpearMode;
   caughtFishType: FishType | null;
+  /** True when the carried fish is the scripted FTUE tutorial target. */
+  caughtFishWasFtueShowcase: boolean;
   /** Distance from player anchor when fish was hooked; used for progressive reel-in scale. */
   caughtFishStartDistance: number;
   catchValue: number;
@@ -179,6 +194,7 @@ export type GameEvent =
   | { type: 'runEnded'; earnings: number; runDurationSec: number; catchCount: number }
   | { type: 'upgradeBought'; id: string }
   | { type: 'ftueDiveExited' }
+  | { type: 'ftueOxygenLessonShown' }
   | { type: 'tutorialHintShown'; id: TutorialHintId };
 
 export type TutorialHintId =
@@ -207,6 +223,9 @@ export interface LeaderboardEntry {
 export interface LeaderboardState {
   bestFishCaught: number;
   lastSubmittedFishCaught: number;
+  bestRunMoney: number;
+  bestRunFishCaught: number;
+  allTimeFishCaught: number;
   entries: LeaderboardEntry[];
 }
 

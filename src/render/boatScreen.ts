@@ -331,29 +331,37 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   renderer.drawText('BANK', contentX + padX, STATS_Y + 8, bankTextW, 20, t(14, Boat.labelMuted, 'left', '700'));
   renderer.drawText(`$${state.money}`, contentX + padX, STATS_Y + 32, bankTextW, 44, tb(32, C.gold, 'left'));
 
-  renderer.drawText('LAST DIVE', ldX + padX, STATS_Y + 8, ldTextW, 20, t(14, Boat.labelMuted, 'left', '700'));
-  if (state.lastRunEarnings > 0) {
-    const dur = Math.max(0, state.lastRunDurationSec);
-    const durLabel = dur >= 60
-      ? `${Math.floor(dur / 60)}m ${Math.floor(dur % 60)}s`
-      : `${Math.floor(dur)} sec.`;
-    const rightColW = 78;
-    const gapMid = 8;
-    const moneyW = Math.max(80, ldTextW - rightColW - gapMid);
+  if (state.leaderboard.bestRunMoney > 0 || state.leaderboard.allTimeFishCaught > 0) {
+    const colGap = 10;
+    const bestW = Math.floor((ldTextW - colGap) / 2);
+    const allTimeW = ldTextW - colGap - bestW;
+    const leftX = ldX + padX;
+    const rightX = leftX + bestW + colGap;
+    const blockTop = STATS_Y + 10;
+    const numberStyle = { useLayoutMaxWidth: false } as const;
+    renderer.drawRectAlpha(Boat.labelMuted, 0.22, leftX + bestW + colGap / 2 - 1, STATS_Y + 16, 2, STATS_H - 32);
+    renderer.drawText('BEST RUN', leftX, blockTop, bestW, 18, t(12, Boat.labelMuted, 'center', '700'));
     renderer.drawText(
-      `$${state.lastRunEarnings}`,
-      ldX + padX,
-      STATS_Y + 38,
-      moneyW,
-      34,
-      tb(28, C.white, 'left'),
+      `${state.leaderboard.bestFishCaught}`,
+      leftX,
+      blockTop + 22,
+      bestW,
+      30,
+      tb(28, C.white, 'center', numberStyle),
     );
-    const rightX = ldX + ldW - padX - rightColW;
-    const fishLine = `${state.lastRunCatchCount} fish`;
-    renderer.drawText(fishLine, rightX, STATS_Y + 28, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
-    renderer.drawText(durLabel, rightX, STATS_Y + 50, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
+    renderer.drawText('FISHES', leftX, blockTop + 52, bestW, 18, t(11, Boat.sectionMint, 'center', '800'));
+    renderer.drawText('ALL-TIME', rightX, blockTop, allTimeW, 18, t(12, Boat.labelMuted, 'center', '700'));
+    renderer.drawText(
+      `${state.leaderboard.allTimeFishCaught}`,
+      rightX,
+      blockTop + 22,
+      allTimeW,
+      30,
+      tb(28, C.gold, 'center', numberStyle),
+    );
+    renderer.drawText('FISHES', rightX, blockTop + 52, allTimeW, 18, t(11, Boat.sectionMint, 'center', '800'));
   } else {
-    renderer.drawText('No run yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, Boat.labelMuted, 'left', '600'));
+    renderer.drawText('No stats yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, Boat.labelMuted, 'left', '600'));
     renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
   }
 
