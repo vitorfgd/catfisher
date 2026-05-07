@@ -23,8 +23,8 @@ export const UPGRADE_LEVEL_NAMES: Record<keyof UpgradeState, string[]> = {
 
 /** Gear card titles (no subtitle on gear). */
 export const CONSUMABLE_NAMES: Record<'net' | 'bait', string> = {
-  net: 'NET',
-  bait: 'BAIT',
+  net: 'Net',
+  bait: 'Bait',
 };
 
 export const UPGRADE_LEVEL_SPRITES: Record<keyof UpgradeState, string[]> = {

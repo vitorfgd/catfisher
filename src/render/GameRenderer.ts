@@ -80,4 +80,18 @@ export interface GameRenderer {
 
   // Gradient rect: color1 at top, color2 at bottom
   drawGradientRect(color1: string, color2: string, x: number, y: number, width: number, height: number): void;
+
+  /**
+   * Rounded rect filled with a radial gradient: `centerColor` at the center,
+   * `edgeColor` toward the perimeter (circle sized to cover corners).
+   */
+  drawRadialGradientRoundRect(
+    centerColor: string,
+    edgeColor: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ): void;
 }

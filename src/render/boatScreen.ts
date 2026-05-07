@@ -52,38 +52,58 @@ const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {
   bait: AssetIds.iconBait,
 };
 
+/** Matches upgrade / gear row `drawRoundRect` radius — highlight spans the flat top span between corners. */
+const ROW_CARD_CORNER_R = 14;
+
+function drawRowCardTopEdge(renderer: GameRenderer, x: number, y: number, width: number): void {
+  const flatW = width - 2 * ROW_CARD_CORNER_R;
+  if (flatW <= 0) return;
+  renderer.drawRect(Boat.rowCardTopEdge, x + ROW_CARD_CORNER_R, y + 1, flatW, 1);
+}
+
+/** GO FISH uses the same corner radius as row cards (`drawRoundRect(..., 14)`). */
+function drawDiveButtonTopEdge(renderer: GameRenderer, x: number, y: number, width: number): void {
+  const flatW = width - 2 * ROW_CARD_CORNER_R;
+  if (flatW <= 0) return;
+  renderer.drawRect(Boat.diveTopBevel, x + ROW_CARD_CORNER_R, y + 1, flatW, 1);
+}
+
 function drawUpgradeButton(
   renderer: GameRenderer,
   id: keyof UpgradeState,
   level: number,
   cost: number,
   canAfford: boolean,
-  isOpen: boolean,
+  _isOpen: boolean,
   x: number,
   y: number,
   width: number,
   height: number,
 ): void {
   const maxed = level >= UPGRADE_MAX_LEVEL;
-  const accent = maxed ? C.gold : C.teal;
-  const dim = !canAfford && !maxed && !isOpen;
-  const nameC = dim ? Boat.labelMuted : Boat.labelBright;
 
-  renderer.drawRoundRectAlpha(Boat.card, 0.98, x, y, width, height, 14);
-  if (isOpen) renderer.drawRoundRectAlpha(Boat.cardOpen, 0.9, x, y, width, height, 14);
-  if (!isOpen) renderer.drawRoundRectAlpha(C.teal, 0.06, x + 1, y + 1, width - 2, height - 2, 13);
+  renderer.drawRoundRect(Boat.rowCard, x, y, width, height, ROW_CARD_CORNER_R);
+  drawRowCardTopEdge(renderer, x, y, width);
 
   const iconZone = height;
   const iconPad = 8;
   const iconSz = iconZone - iconPad * 2;
   const sprite = UPGRADE_LEVEL_SPRITES[id][level - 1];
-  renderer.drawRoundRectAlpha(accent, dim ? 0.10 : 0.22, x + 2, y + 2, iconZone - 4, height - 4, 12);
+  renderer.drawRadialGradientRoundRect(
+    Boat.iconSquareCenter,
+    Boat.iconSquareEdge,
+    x + 2,
+    y + 2,
+    iconZone - 4,
+    height - 4,
+    12,
+  );
   renderer.drawImage({ id: sprite }, x + iconPad, y + iconPad, iconSz, iconSz);
 
   const infoX = x + iconZone + 12;
   const infoW = width - iconZone - 96;
   const subStyle = { ...t(14, Boat.labelMuted, 'left', '500'), useLayoutMaxWidth: false } as const;
-  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 6, infoW, 28, t(19, nameC, 'left', '800'));
+  renderer.drawText(UPGRADE_LEVEL_NAMES[id][level - 1], infoX, y + 6, infoW, 28, t(19, C.white, 'left', '800'));
   renderer.drawText(UPGRADE_SUBTEXT[id], infoX, y + 28, infoW, 38, subStyle);
 
   const pipY = y + 72;
@@ -92,7 +112,7 @@ function drawUpgradeButton(
   const pipGap = 16;
   for (let i = 0; i < UPGRADE_MAX_LEVEL; i += 1) {
     const cx = pip0 + i * pipGap;
-    renderer.drawEllipse(i < level ? accent : Boat.pipEmpty, cx, pipY, pipR, pipR);
+    renderer.drawEllipse(i < level ? Boat.menuAccent : Boat.pipEmpty, cx, pipY, pipR, pipR);
   }
 
   const costLabel = maxed ? 'MAX' : `$${cost}`;
@@ -128,7 +148,7 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   renderer.drawText(`Level ${level}  ·  ${curName}`, M, HDR_H + 12, W - M * 2, 28, t(18, C.muted, 'center'));
   const pipStartX = W / 2 - (UPGRADE_MAX_LEVEL * 16) / 2 + 8;
   for (let i = 0; i < UPGRADE_MAX_LEVEL; i += 1) {
-    renderer.drawEllipse(i < level ? accent : Boat.pipEmpty, pipStartX + i * 16, HDR_H + 52, 6, 6);
+    renderer.drawEllipse(i < level ? Boat.menuAccent : Boat.pipEmpty, pipStartX + i * 16, HDR_H + 52, 6, 6);
   }
 
   const SZ = 200;
@@ -150,7 +170,7 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   if (!maxed) {
     const nextSprite = UPGRADE_LEVEL_SPRITES[id][level];
     const nextName = UPGRADE_LEVEL_NAMES[id][level];
-    renderer.drawRoundRectAlpha(accent, 0.18, sprX - 10, sprY - 10, SZ + 20, SZ + 20, 16);
+    renderer.drawRoundRect(Boat.iconSquare, sprX - 10, sprY - 10, SZ + 20, SZ + 20, 16);
     renderer.drawImage({ id: nextSprite }, sprX, sprY, SZ, SZ);
 
     const lblY = sprY + SZ + GAP;
@@ -167,7 +187,7 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
       off += 36;
     }
   } else {
-    renderer.drawRoundRectAlpha(C.gold, 0.22, sprX - 10, sprY - 10, SZ + 20, SZ + 20, 16);
+    renderer.drawRoundRect(Boat.iconSquare, sprX - 10, sprY - 10, SZ + 20, SZ + 20, 16);
     renderer.drawImage({ id: curSprite }, sprX, sprY, SZ, SZ);
 
     const lblY = sprY + SZ + GAP;
@@ -215,24 +235,29 @@ function drawConsumableCard(
   height: number,
 ): void {
   const stocked = stock >= maxStock;
-  const accent = stocked ? C.gold : canAfford ? C.amber : C.muted;
-  const nameC = canAfford || stocked ? Boat.labelBright : Boat.labelMuted;
   const costC = stocked ? C.gold : canAfford ? C.amber : C.muted;
 
-  renderer.drawRoundRectAlpha(Boat.card, 0.98, x, y, width, height, 14);
-  renderer.drawRoundRectAlpha(Boat.gearTint, 0.55, x, y, width, height, 14);
-  renderer.drawRoundRectAlpha(C.amber, canAfford || stocked ? 0.10 : 0.04, x, y, width, height, 14);
+  renderer.drawRoundRect(Boat.rowCard, x, y, width, height, ROW_CARD_CORNER_R);
+  drawRowCardTopEdge(renderer, x, y, width);
 
   const iconAreaSz = height;
   const iconPad = 8;
   const iconSz = iconAreaSz - iconPad * 2;
-  renderer.drawRoundRectAlpha(accent, 0.24, x + 2, y + 2, iconAreaSz - 4, height - 4, 12);
+  renderer.drawRadialGradientRoundRect(
+    Boat.iconSquareCenter,
+    Boat.iconSquareEdge,
+    x + 2,
+    y + 2,
+    iconAreaSz - 4,
+    height - 4,
+    12,
+  );
   renderer.drawImage({ id: CONSUMABLE_ICON_IDS[id] }, x + iconPad, y + iconPad, iconSz, iconSz);
 
   const infoX = x + iconAreaSz + 12;
   const infoW = width - (infoX - x) - 72;
   const noFit = { useLayoutMaxWidth: false } as const;
-  renderer.drawText(CONSUMABLE_NAMES[id], infoX, y + 18, infoW, 36, t(20, nameC, 'left', '800', noFit));
+  renderer.drawText(CONSUMABLE_NAMES[id], infoX, y + 18, infoW, 36, t(20, C.white, 'left', '800', noFit));
 
   const pipY = y + 60;
   const pipR = 6;
@@ -240,7 +265,7 @@ function drawConsumableCard(
   const pipGap = 16;
   for (let i = 0; i < maxStock; i += 1) {
     const cx = pip0 + i * pipGap;
-    renderer.drawEllipse(i < stock ? accent : Boat.pipEmpty, cx, pipY, pipR, pipR);
+    renderer.drawEllipse(i < stock ? Boat.menuAccent : Boat.pipEmpty, cx, pipY, pipR, pipR);
   }
   renderer.drawText(stocked ? 'FULL' : `$${cost}`, x + width - 72, y + 32, 64, 30, tb(19, costC, 'right', noFit));
 }
@@ -329,7 +354,7 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const bankTextW = bankW - padX * 2;
   const ldTextW = ldW - padX * 2;
   renderer.drawText('BANK', contentX + padX, STATS_Y + 8, bankTextW, 20, t(14, Boat.labelMuted, 'left', '700'));
-  renderer.drawText(`$${state.money}`, contentX + padX, STATS_Y + 32, bankTextW, 44, tb(32, C.gold, 'left'));
+  renderer.drawText(`$${state.money}`, contentX + padX, STATS_Y + 32, bankTextW, 44, tb(32, Boat.menuAccent, 'left'));
 
   renderer.drawText('LAST DIVE', ldX + padX, STATS_Y + 8, ldTextW, 20, t(14, Boat.labelMuted, 'left', '700'));
   if (state.lastRunEarnings > 0) {
@@ -353,8 +378,8 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     renderer.drawText(fishLine, rightX, STATS_Y + 28, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
     renderer.drawText(durLabel, rightX, STATS_Y + 50, rightColW, 22, t(15, Boat.labelMuted, 'right', '600'));
   } else {
-    renderer.drawText('No run yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, Boat.labelMuted, 'left', '600'));
-    renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.sectionMint, 'left', '600'));
+    renderer.drawText('No run yet', ldX + padX, STATS_Y + 36, ldTextW, 24, t(16, C.white, 'left', '600'));
+    renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.labelMuted, 'left', '600'));
   }
 
   const diveCardPadY = sectionPadY + 4;
@@ -373,13 +398,13 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const pressP = state.phase === GamePhase.Diving ? Math.max(0.65, 1 - menuUiA) : 0;
   const pressY = Math.max(loopPressY, Math.min(7, Math.max(0, pressP * 7)));
   const shadowOffset = Math.max(2, 10 - pressY);
-  renderer.drawRoundRectAlpha('rgba(64,220,170,0.36)', 1, diveX, DIVE_BUTTON_Y + shadowOffset, diveW, DIVE_BUTTON_HEIGHT, 14);
-  renderer.drawRoundRectAlpha('rgba(2,6,10,0.40)', 1, diveX, DIVE_BUTTON_Y + shadowOffset + 2, diveW, DIVE_BUTTON_HEIGHT, 14);
-  renderer.drawRoundRectAlpha(Boat.diveHi, loopPressed ? 0.18 : 0.08, diveX - 4, DIVE_BUTTON_Y + pressY - 4, diveW + 8, DIVE_BUTTON_HEIGHT + 8, 16);
-  renderer.drawRoundRect(Boat.dive, diveX, DIVE_BUTTON_Y + pressY, diveW, DIVE_BUTTON_HEIGHT, 14);
+  renderer.drawRoundRect(Boat.diveShadow, diveX, DIVE_BUTTON_Y + shadowOffset, diveW, DIVE_BUTTON_HEIGHT, ROW_CARD_CORNER_R);
+  renderer.drawRoundRectAlpha(Boat.diveHi, loopPressed ? 0.22 : 0.11, diveX - 4, DIVE_BUTTON_Y + pressY - 4, diveW + 8, DIVE_BUTTON_HEIGHT + 8, 16);
+  renderer.drawRoundRect(Boat.dive, diveX, DIVE_BUTTON_Y + pressY, diveW, DIVE_BUTTON_HEIGHT, ROW_CARD_CORNER_R);
+  drawDiveButtonTopEdge(renderer, diveX, DIVE_BUTTON_Y + pressY, diveW);
   const diveHiH = 18;
   const diveHiY = DIVE_BUTTON_Y + pressY + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
-  renderer.drawRoundRectAlpha(Boat.diveHi, 0.18, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.22, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
   renderer.drawText('GO FISH', diveX, DIVE_BUTTON_Y + pressY + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
     ...t(32, Boat.card, 'center', '800'),
     useLayoutMaxWidth: false,
@@ -390,7 +415,7 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const upgradesCardH = upgradesCardBottom - upgradesCardTop;
   renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, upgradesCardTop, deck.w, upgradesCardH, 18);
 
-  drawSectionHeader(renderer, secX, UPG_LABEL_Y, secW, 'UPGRADES', Boat.sectionMint);
+  drawSectionHeader(renderer, secX, UPG_LABEL_Y, secW, 'UPGRADES', Boat.menuAccent);
 
   for (let i = 0; i < UPGRADE_KEYS.length; i += 1) {
     const key = UPGRADE_KEYS[i];
@@ -427,7 +452,7 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const gearCardH = gearCardBottom - gearCardTop;
   renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, deck.x, gearCardTop, deck.w, gearCardH, 18);
 
-  drawSectionHeader(renderer, secX, GEAR_HEADER_LABEL_Y, secW, 'GEAR', Boat.sectionSand);
+  drawSectionHeader(renderer, secX, GEAR_HEADER_LABEL_Y, secW, 'GEAR', Boat.menuAccent);
 
   const cx = secX;
   drawConsumableCard(
