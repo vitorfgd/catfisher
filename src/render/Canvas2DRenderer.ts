@@ -213,4 +213,25 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.fillStyle = gradient;
     this.ctx.fillRect(x, y, width, height);
   }
+
+  drawRadialGradientRoundRect(
+    centerColor: string,
+    edgeColor: string,
+    x: number,
+    y: number,
+    width: number,
+    height: number,
+    radius: number,
+  ): void {
+    const cx = x + width / 2;
+    const cy = y + height / 2;
+    const outerR = Math.hypot(width / 2, height / 2);
+    const g = this.ctx.createRadialGradient(cx, cy, 0, cx, cy, outerR);
+    g.addColorStop(0, centerColor);
+    g.addColorStop(1, edgeColor);
+    this.ctx.fillStyle = g;
+    this.ctx.beginPath();
+    this.ctx.roundRect(x, y, width, height, radius);
+    this.ctx.fill();
+  }
 }

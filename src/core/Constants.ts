@@ -214,9 +214,6 @@ export const BOAT_CONTENT_W = UPGRADE_BUTTON_W;
 /** Left/right padding from content column edge to primary text in stats rows. */
 export const BOAT_CONTENT_TEXT_PAD_X = 12;
 
-/** Full-screen dim over `boatBg` on the boat menu. */
-export const BOAT_MENU_SCRIM_ALPHA = 0.2;
-
 /** Top Y of the Bank / Last dive stats row (no title logo). */
 export const BOAT_STATS_CARD_TOP = 33;
 
