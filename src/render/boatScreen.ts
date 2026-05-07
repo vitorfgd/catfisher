@@ -30,7 +30,6 @@ import {
   UPGRADE_PANEL_BUY_H,
   UPGRADE_PANEL_BUY_Y,
   UPGRADE_LAST_ROW_BOTTOM,
-  BOAT_MENU_SCRIM_ALPHA,
   getBoatStatsCardTopY,
 } from '../core/Constants';
 import { DIVE_TRANSITION } from '../core/diveTransitionConfig';
@@ -341,8 +340,6 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
   const sectionPadY = BOAT_MENU_SECTION_CARD_PAD_Y;
   const secX = BOAT_SECTION_CONTENT_X;
   const secW = BOAT_SECTION_CONTENT_W;
-
-  renderer.drawRectAlpha(C.bg, BOAT_MENU_SCRIM_ALPHA, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const firstU = getUpgradeButtonRect(0);
   const UPG_LABEL_Y = firstU.y - SECTION_HEADER_BLOCK_H - UPGRADE_SECTION_HEADER_GAP;
