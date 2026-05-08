@@ -997,7 +997,7 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
   renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, logoTop, logoW, logoH);
 
   const gapMidY = (logoBottom + y) * 0.5 + 8;
-  drawBreachLeaderboardTapCueHand(renderer, CANVAS_WIDTH * 0.56 + 10, gapMidY);
+  drawBreachLeaderboardTapCueHand(renderer, CANVAS_WIDTH * 0.51 + 6, gapMidY);
 
   renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
   renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);

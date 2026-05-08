@@ -9,7 +9,7 @@ export const FTUE_HAND_MAX_SPAN_HUD_PX = 100;
 /** Boat menu upgrade cue. */
 export const FTUE_HAND_MAX_SPAN_BOAT_PX = 84;
 /** Breach leaderboard tap cue = world span × this (fits gap above card). */
-export const FTUE_HAND_BREACH_SPAN_MULT = 0.92;
+export const FTUE_HAND_BREACH_SPAN_MULT = 1.2;
 
 /**
  * Scale the hand art so its longest edge equals `maxSpanPx`; preserves aspect ratio.
