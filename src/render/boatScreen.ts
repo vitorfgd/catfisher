@@ -208,9 +208,12 @@ function drawUpgradePanel(renderer: GameRenderer, state: RenderState, id: keyof 
   const bbH = UPGRADE_PANEL_BUY_H;
   if (!maxed) {
     if (canAfford) {
-      renderer.drawRoundRect(accent, M, bbY, W - M * 2, bbH, 14);
+      renderer.drawRoundRect(Boat.dive, M, bbY, W - M * 2, bbH, 14);
       renderer.drawRoundRectAlpha('#fff', 0.10, M + 4, bbY + 3, W - M * 2 - 8, 18, 10);
-      renderer.drawText(`UPGRADE  $${cost}`, M, bbY, W - M * 2, bbH, tb(26, C.white, 'center'));
+      renderer.drawText(`UPGRADE  $${cost}`, M, bbY + DIVE_BUTTON_LABEL_Y_OFFSET, W - M * 2, bbH, {
+        ...t(32, Boat.card, 'center', '800'),
+        useLayoutMaxWidth: false,
+      });
     } else {
       renderer.drawRoundRectAlpha(C.panel, 0.96, M, bbY, W - M * 2, bbH, 14);
       renderer.drawText(`$${cost - state.money} MORE NEEDED`, M, bbY, W - M * 2, bbH, t(18, C.muted, 'center'));
