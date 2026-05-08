@@ -5,6 +5,7 @@ import {
   PUFFER_TIME_BONUS,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
+import { FTUE_HAND_MAX_SPAN_HUD_PX, getFtueHandDrawSize } from '../shared/FtueHandLayout';
 import {
   HUD_BAIT_BUTTON_CX,
   HUD_CONSUMABLE_BUTTON_RADIUS,
@@ -26,7 +27,6 @@ const OXYGEN_TANK_Y = Math.round(CANVAS_HEIGHT * 0.39);
 const OXYGEN_TANK_W = 54;
 const OXYGEN_TANK_H = 188;
 const DEBUG_SHOW_GAMEPLAY_MESSAGES = false;
-const FTUE_HAND_PX = 72;
 const FTUE_HAND_TIP_X_FR = 0.88;
 const FTUE_HAND_TIP_Y_FR = 0.5;
 const FTUE_CLICK_DIP_PX = 8;
@@ -50,10 +50,11 @@ function drawFtueConsumableHand(renderer: GameRenderer, target: 'bait' | 'net'):
   const press = ftueClickPressT();
   const tipX = cx;
   const tipY = cy + press * FTUE_CLICK_DIP_PX;
-  const drawL = tipX - FTUE_HAND_TIP_X_FR * FTUE_HAND_PX;
-  const drawT = tipY - FTUE_HAND_TIP_Y_FR * FTUE_HAND_PX;
+  const { w: hw, h: hh } = getFtueHandDrawSize(FTUE_HAND_MAX_SPAN_HUD_PX);
+  const drawL = tipX - FTUE_HAND_TIP_X_FR * hw;
+  const drawT = tipY - FTUE_HAND_TIP_Y_FR * hh;
   renderer.pushRotate(30, tipX, tipY);
-  renderer.drawImage({ id: AssetIds.ftueHand }, drawL, drawT, FTUE_HAND_PX, FTUE_HAND_PX);
+  renderer.drawImage({ id: AssetIds.ftueHand }, drawL, drawT, hw, hh);
   renderer.pop();
 }
 

@@ -84,6 +84,8 @@ export interface FtueRuntimeState {
   freeConsumablesGranted: boolean;
   usedNet: boolean;
   usedBait: boolean;
+  /** Sim seconds — advances during frozen shark FTUE for scale tween. */
+  sharkFtuePulseT: number;
 }
 
 export interface PlayerState {
@@ -348,6 +350,9 @@ export interface FullGameState {
    * (Reels-style hook; stored completion is in platform, not here).
    */
   ftueActive: boolean;
+
+  /** Background music muted (browser persists via localStorage). */
+  musicMuted: boolean;
 
   /** Shown over Action when a spear-caught treasure is paying out (Ridiculous Hook–style). */
   treasureReveal: TreasureRevealState | null;

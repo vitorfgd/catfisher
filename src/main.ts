@@ -4,6 +4,7 @@
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GAME_ASPECT_RATIO } from './core/Constants';
 import {
   applyFtueOxygenLessonSeen,
+  applyMusicMutedPreference,
   applyTutorialSeenState,
   bootstrapActionFtueDive,
   createInitialState,
@@ -16,6 +17,7 @@ import { BrowserInputAdapter } from './platform/BrowserInputAdapter';
 import { BrowserFakeLeaderboardAdapter } from './platform/LeaderboardAdapter';
 import { Canvas2DRenderer } from './render/Canvas2DRenderer';
 import { isFtueDivePendingInStorage, isFtueOxygenLessonSeenInStorage } from './platform/FtueStorage';
+import { readMusicMutedStorage } from './platform/MusicMutedStorage';
 import { readTutorialSeenState } from './platform/TutorialStorage';
 import { runConsistencyChecks } from './shared/ConsistencyChecks';
 
@@ -84,7 +86,6 @@ async function main(): Promise<void> {
   const input = new BrowserInputAdapter(canvas);
   const audio = new BrowserAudioAdapter(
     toPublicAssetUrl(BrowserAssetManifest.sounds.backgroundMusic),
-    toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonFire),
     toPublicAssetUrl(BrowserAssetManifest.sounds.boatMenuAmbient),
     toPublicAssetUrl(BrowserAssetManifest.sounds.diverEntryPerc),
     toPublicAssetUrl(BrowserAssetManifest.sounds.waterlineBubbles),
@@ -92,6 +93,7 @@ async function main(): Promise<void> {
   );
   const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();
+  applyMusicMutedPreference(gameState, readMusicMutedStorage());
   applyTutorialSeenState(gameState, readTutorialSeenState());
   const leaderboardSnapshot = leaderboard.getFishCaughtLeaderboard();
   setLeaderboardEntries(

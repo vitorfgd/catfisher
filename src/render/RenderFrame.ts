@@ -13,12 +13,21 @@ import {
   HARPOON_GUN_DRAW_W,
   HARPOON_GUN_DRAW_H,
   HARPOON_GUN_SLIDE_HIDDEN_PX,
+  DIVE_BUTTON_HEIGHT,
+  DIVE_BUTTON_LABEL_Y_OFFSET,
+  getInGameMusicButtonRect,
+  IN_GAME_MUSIC_BUTTON_DIAM,
   SHARK_BITE_VFX_APPROACH_SEC,
   SHARK_BITE_VFX_CLAMP_JITTER_SEC,
   SHARK_BITE_VFX_TOTAL_SEC,
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
+import {
+  FTUE_HAND_BREACH_SPAN_MULT,
+  FTUE_HAND_MAX_SPAN_WORLD_PX,
+  getFtueHandDrawSize,
+} from '../shared/FtueHandLayout';
 import { drawBoatMenuUi, drawBoatSceneLayer, drawBoatScreen } from './boatScreen';
 import {
   drawDiveBackdropWipe,
@@ -295,7 +304,6 @@ function drawParticles(renderer: GameRenderer, particles: RenderState['particles
  * (tap target) so it reads as a click on the fish, not a floating icon.
  * Tip in asset ≈ 88% from the left, 50% from the top of the draw square.
  */
-const FTUE_HAND_PX = 60;
 const FTUE_HAND_TIP_X_FR = 0.88;
 const FTUE_HAND_TIP_Y_FR = 0.5;
 /** Extra X offset; negative nudges the tap point left. */
@@ -356,8 +364,7 @@ function drawFtueHandWorld(renderer: GameRenderer, state: RenderState): void {
   const tipX = target.x - fishW * 0.1 + FTUE_HAND_BASE_NUDGE_X;
   const tipY = target.y - fishH * 0.08 + FTUE_HAND_BASE_NUDGE_Y + press * FTUE_CLICK_DIP_PX;
 
-  const hw = FTUE_HAND_PX;
-  const hh = FTUE_HAND_PX;
+  const { w: hw, h: hh } = getFtueHandDrawSize(FTUE_HAND_MAX_SPAN_WORLD_PX);
   const drawL = tipX - FTUE_HAND_TIP_X_FR * hw;
   const drawT = tipY - FTUE_HAND_TIP_Y_FR * hh;
   // 30° clockwise (canvas: positive = clockwise) around the fingertip
@@ -438,7 +445,9 @@ function drawFtueCtaOnly(renderer: GameRenderer, state: RenderState): void {
     || state.ftuePrompt === 'useNet'
     || state.ftuePrompt === 'oxygenLimit';
   const isTreasure = state.ftuePrompt === 'treasureIntro' || state.ftuePrompt === 'catchTreasure';
-  const bottomPad = useFightBackPlacement ? 210 : 24;
+  const bottomPad = useFightBackPlacement
+    ? (isFightBack ? 268 : 210)
+    : 24;
   const subH = useFightBackPlacement ? 52 : 40;
   const subY = H - bottomPad - subH;
   const headH = useFightBackPlacement ? 62 : 56;
@@ -902,19 +911,93 @@ function drawSharkBiteTeeth(renderer: GameRenderer, elapsed: number): void {
   renderer.popOpacity();
 }
 
+/** Matches boat GO FISH / row cards corner radius. */
+const BREACH_CONTINUE_BTN_R = 14;
+
+function drawBreachLeaderboardTapCueHand(renderer: GameRenderer, tipX: number, tipY: number): void {
+  const press = ftueClickPressT();
+  const dip = press * FTUE_CLICK_DIP_PX;
+  const { w: hw, h: hh } = getFtueHandDrawSize(
+    FTUE_HAND_MAX_SPAN_WORLD_PX * FTUE_HAND_BREACH_SPAN_MULT,
+  );
+  const tipYy = tipY + dip;
+  const drawL = tipX - FTUE_HAND_TIP_X_FR * hw;
+  const drawT = tipYy - FTUE_HAND_TIP_Y_FR * hh;
+  renderer.pushRotate(28, tipX, tipYy);
+  renderer.drawImage({ id: AssetIds.ftueHand }, drawL, drawT, hw, hh);
+  renderer.pop();
+}
+
+function drawDiveStylePrimaryButton(
+  renderer: GameRenderer,
+  diveX: number,
+  diveY: number,
+  diveW: number,
+  label: string,
+  pressY: number,
+): void {
+  const shadowOffset = Math.max(2, 10 - pressY);
+  renderer.drawRoundRect(
+    Boat.diveShadow,
+    diveX,
+    diveY + shadowOffset,
+    diveW,
+    DIVE_BUTTON_HEIGHT,
+    BREACH_CONTINUE_BTN_R,
+  );
+  renderer.drawRoundRectAlpha(
+    Boat.diveHi,
+    0.11,
+    diveX - 4,
+    diveY + pressY - 4,
+    diveW + 8,
+    DIVE_BUTTON_HEIGHT + 8,
+    16,
+  );
+  renderer.drawRoundRect(
+    Boat.dive,
+    diveX,
+    diveY + pressY,
+    diveW,
+    DIVE_BUTTON_HEIGHT,
+    BREACH_CONTINUE_BTN_R,
+  );
+  const flatW = diveW - 2 * BREACH_CONTINUE_BTN_R;
+  if (flatW > 0) {
+    renderer.drawRect(Boat.diveTopBevel, diveX + BREACH_CONTINUE_BTN_R, diveY + pressY + 1, flatW, 1);
+  }
+  const diveHiH = 18;
+  const diveHiY = diveY + pressY + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.22, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
+  renderer.drawText(label, diveX, diveY + pressY + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
+    ...t(26, Boat.card, 'center', '800'),
+    useLayoutMaxWidth: false,
+  });
+}
+
 function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState, alpha: number): void {
   if (alpha <= 0.004) return;
+
+  const BREACH_LOGO_TOP_FRAC = 0.076;
+  const BREACH_CARD_TOP_FRAC = 0.452;
+  /** Matches horizontal inset `(CANVAS_WIDTH - w) / 2` for the leaderboard card. */
+  const BREACH_CARD_SIDE_MARGIN = 36;
 
   const w = CANVAS_WIDTH - 72;
   const h = 490;
   const x = (CANVAS_WIDTH - w) / 2;
-  const y = Math.round(CANVAS_HEIGHT * 0.405);
+  const y = Math.round(CANVAS_HEIGHT * BREACH_CARD_TOP_FRAC);
   renderer.pushOpacity(alpha);
   renderer.drawRectAlpha(C.bg, 0.52, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
 
   const logoW = Math.min(390, CANVAS_WIDTH - 34);
   const logoH = logoW / 1.58;
-  renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, CANVAS_HEIGHT * 0.13, logoW, logoH);
+  const logoTop = CANVAS_HEIGHT * BREACH_LOGO_TOP_FRAC;
+  const logoBottom = logoTop + logoH;
+  renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, logoTop, logoW, logoH);
+
+  const gapMidY = (logoBottom + y) * 0.5 + 8;
+  drawBreachLeaderboardTapCueHand(renderer, CANVAS_WIDTH * 0.56 + 10, gapMidY);
 
   renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
   renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);
@@ -923,7 +1006,7 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
   renderer.drawText(`${state.sessionCatchCount} FISH CAUGHT`, x, y + 62, w, 44, tb(31, C.gold, 'center'));
   renderer.drawText(`+$${state.sessionEarnings}`, x, y + 112, w, 32, tb(23, C.white, 'center'));
 
-  const listY = y + 204;
+  const listY = y + 180;
   renderer.drawText('LEADERBOARD', x + 24, listY - 34, w - 48, 24, t(17, C.teal, 'left', '800'));
   const rows = state.leaderboard.entries
     .map((entry) => entry.isPlayer
@@ -941,8 +1024,30 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
     renderer.drawText(entry.name, x + 92, rowY + 4, 170, 26, t(17, C.white, 'left', '800'));
     renderer.drawText(`${entry.fishCaught}`, x + w - 94, rowY + 4, 58, 26, tb(18, isPlayer ? C.gold : C.white, 'right'));
   }
-  renderer.drawText('TAP ANYWHERE TO CONTINUE', x, y + h - 58, w, 36, tb(21, C.white, 'center'));
+
+  const btnW = w - BREACH_CARD_SIDE_MARGIN * 2;
+  const btnX = x + BREACH_CARD_SIDE_MARGIN;
+  const btnY = y + h - DIVE_BUTTON_HEIGHT - BREACH_CARD_SIDE_MARGIN;
+  const loopPressed = Math.floor(Date.now() / 520) % 2 === 0;
+  const pressY = loopPressed ? 5 : 0;
+  drawDiveStylePrimaryButton(renderer, btnX, btnY, btnW, 'TAP TO CONTINUE', pressY);
+
   renderer.popOpacity();
+}
+
+function drawInGameMusicMuteButton(renderer: GameRenderer, state: RenderState): void {
+  const r = getInGameMusicButtonRect();
+  const d = IN_GAME_MUSIC_BUTTON_DIAM;
+  const corner = d * 0.5;
+  const shadowOff = 4;
+  const iconId = state.musicMuted ? AssetIds.iconMusicOff : AssetIds.iconMusicOn;
+  renderer.drawRoundRect(Boat.diveShadow, r.x, r.y + shadowOff, d, d, corner);
+  renderer.drawRoundRect(Boat.dive, r.x, r.y, d, d, corner);
+  renderer.drawRoundRectAlpha('#fff', 0.12, r.x + 3, r.y + 4, d - 6, (d - 6) * 0.38, (d - 6) * 0.24);
+  const iconSz = Math.round(d * 0.48);
+  const ix = r.x + (d - iconSz) / 2;
+  const iy = r.y + (d - iconSz) / 2;
+  renderer.drawImageTinted({ id: iconId }, ix, iy, iconSz, iconSz, Boat.card);
 }
 
 function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): void {
@@ -990,6 +1095,12 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
     drawTreasureFlyingCoins(renderer, state);
   }
   drawCatchCoinBursts(renderer, state);
+  if (
+    state.phase === GamePhase.Action
+    && !(state.ftueStage === 'sharkEncounter' && state.ftueActive)
+  ) {
+    drawInGameMusicMuteButton(renderer, state);
+  }
 }
 
 /** Breach: boat backdrop + diver use `breachBoatRevealAlpha`; menu fades in once diver is on deck. */

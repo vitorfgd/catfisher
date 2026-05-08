@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { DIVE_TRANSITION, getMenuToGameDiveSegmentEnds, MENU_TO_GAME_DIVE_TOTAL_SEC } from './diveTransitionConfig';
+import {
+  DIVE_TRANSITION,
+  GO_FISH_SPLASH_DELAY_MS,
+  getMenuToGameDiveSegmentEnds,
+  MENU_TO_GAME_DIVE_TOTAL_SEC,
+} from './diveTransitionConfig';
 import { BASE_SPEAR_MAX_DISTANCE, OCEAN_BREACH_TOTAL_SEC, OCEAN_DIVE_TOTAL_SEC, PLAYER_X, PLAYER_Y } from './Constants';
 import { bootstrapActionFtueDive, createInitialState, drainEvents, update } from './GameLogic';
 import { setGameRngForTests } from './GameRng';
@@ -45,6 +50,26 @@ describe('dive transition timing', () => {
 
     update(state, 0.001, []);
     expect(state.phase).toBe(GamePhase.Action);
+  });
+
+  it('emits the diver splash once on each dive at the authored splash timing', () => {
+    const state = createInitialState();
+    const splashDelaySec = GO_FISH_SPLASH_DELAY_MS / 1000;
+
+    update(state, 0, [{ type: 'divePress' }]);
+    drainEvents(state);
+    update(state, splashDelaySec - 0.001, []);
+    expect(drainEvents(state).some((event) => event.type === 'diverSplash')).toBe(false);
+    update(state, 0.001, []);
+    expect(drainEvents(state).filter((event) => event.type === 'diverSplash')).toHaveLength(1);
+
+    update(state, OCEAN_DIVE_TOTAL_SEC, []);
+    state.phase = GamePhase.Boat;
+
+    update(state, 0, [{ type: 'divePress' }]);
+    drainEvents(state);
+    update(state, splashDelaySec, []);
+    expect(drainEvents(state).filter((event) => event.type === 'diverSplash')).toHaveLength(1);
   });
 });
 
@@ -106,6 +131,19 @@ describe('action pause semantics', () => {
     expect(state.sessionTime).toBe(0);
     expect(state.netVfx?.elapsed).toBe(0);
     expect(state.harpoonGunAnimElapsed).toBe(0);
+  });
+
+  it('tap to dismiss frozen shark FTUE fires a spear the same frame', () => {
+    const state = createInitialState();
+    bootstrapActionFtueDive(state);
+    expect(state.ftueActive).toBe(true);
+    expect(state.spears.length).toBe(0);
+
+    update(state, 0, [{ type: 'tap', x: 240, y: 400 }]);
+
+    expect(state.ftueActive).toBe(false);
+    expect(state.spears.length).toBe(1);
+    expect(drainEvents(state).some((e) => e.type === 'spearFired')).toBe(true);
   });
 });
 

@@ -37,6 +37,8 @@ export const MHS_TEXTURE_PATHS = {
   [AssetIds.iconNet]: '@sprites/icon-net.png',
   [AssetIds.iconBait]: '@sprites/icon-bait.png',
   [AssetIds.iconCoin]: '@sprites/icon-coin.png',
+  [AssetIds.iconMusicOn]: '@sprites/ui-music-on.png',
+  [AssetIds.iconMusicOff]: '@sprites/ui-music-off.png',
   [AssetIds.ftueHand]: '@sprites/ftue-hand.png',
   [AssetIds.vfxWaterSurface]: '@sprites/vfx-water-surface.png',
   [AssetIds.vfxWaterGradient]: '@sprites/vfx-water-gradient.png',

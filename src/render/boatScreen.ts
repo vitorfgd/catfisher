@@ -34,6 +34,7 @@ import {
 } from '../core/Constants';
 import { DIVE_TRANSITION } from '../core/diveTransitionConfig';
 import { AssetIds } from '../shared/AssetIds';
+import { FTUE_HAND_MAX_SPAN_BOAT_PX, getFtueHandDrawSize } from '../shared/FtueHandLayout';
 import { getBoatContentColumn, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
 import { Boat, C, t, tb } from './theme';
@@ -459,9 +460,9 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     const dip = (press < 0.16 ? press / 0.16 : 1 - (press - 0.16) / 0.84) * 9;
     const tipX = rect.x + 52;
     const tipY = rect.y + 42 + dip;
-    const handPx = 60;
+    const { w: hw, h: hh } = getFtueHandDrawSize(FTUE_HAND_MAX_SPAN_BOAT_PX);
     renderer.pushRotate(30, tipX, tipY);
-    renderer.drawImage({ id: AssetIds.ftueHand }, tipX - 0.88 * handPx, tipY - 0.5 * handPx, handPx, handPx);
+    renderer.drawImage({ id: AssetIds.ftueHand }, tipX - 0.88 * hw, tipY - 0.5 * hh, hw, hh);
     renderer.pop();
   }
 

@@ -4,6 +4,7 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
+import { isBreachLeaderboardVisible } from '../core/diveTransitionController';
 import { markFtueDiveCompleteInStorage, markFtueOxygenLessonSeenInStorage } from './FtueStorage';
 import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
@@ -11,10 +12,12 @@ import { renderFrame } from '../render/RenderFrame';
 import type { BrowserInputAdapter } from './BrowserInputAdapter';
 import type { AudioAdapter, InputAdapter } from './GameEvents';
 import type { LeaderboardAdapter } from './LeaderboardAdapter';
+import { writeMusicMutedStorage } from './MusicMutedStorage';
 
 export class BrowserGameLoop {
   private lastTime = 0;
   private running = false;
+  private persistedMusicMuted: boolean;
 
   constructor(
     private readonly state: FullGameState,
@@ -22,7 +25,9 @@ export class BrowserGameLoop {
     private readonly input: InputAdapter & Pick<BrowserInputAdapter, 'setPhase' | 'setBoatUiState'>,
     private readonly audio: AudioAdapter,
     private readonly leaderboard: LeaderboardAdapter,
-  ) {}
+  ) {
+    this.persistedMusicMuted = state.musicMuted;
+  }
 
   start(): void {
     this.running = true;
@@ -47,8 +52,15 @@ export class BrowserGameLoop {
 
     renderFrame(this.renderer, getRenderState(this.state));
 
+    if (this.state.musicMuted !== this.persistedMusicMuted) {
+      writeMusicMutedStorage(this.state.musicMuted);
+      this.persistedMusicMuted = this.state.musicMuted;
+    }
+    this.audio.syncMusicMuted(this.state.musicMuted);
     this.audio.syncBoatMenuAmbient(this.state.phase === GamePhase.Boat);
-    this.audio.syncUnderwaterAmbient(this.state.phase !== GamePhase.Boat);
+    this.audio.syncUnderwaterAmbient(
+      this.state.phase !== GamePhase.Boat && !isBreachLeaderboardVisible(this.state),
+    );
 
     for (const event of drainEvents(this.state)) {
       if (event.type === 'ftueDiveExited') {

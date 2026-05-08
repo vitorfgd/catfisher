@@ -41,6 +41,10 @@ export const AssetIds = {
   iconNet: 'iconNet',
   iconBait: 'iconBait',
   iconCoin: 'iconCoin',
+  /** In-game music mute toggle (note icon). */
+  iconMusicOn: 'iconMusicOn',
+  /** In-game music mute toggle (note + strike). */
+  iconMusicOff: 'iconMusicOff',
   /** FTUE: finger pointing at fish to tap (points right) */
   ftueHand: 'ftueHand',
 

@@ -49,6 +49,8 @@ export interface GameRenderer {
   drawEllipseAlpha(color: string, alpha: number, centerX: number, centerY: number, radiusX: number, radiusY: number): void;
   drawImage(image: DrawImageRef, x: number, y: number, width: number, height: number): void;
   drawImageAlpha(image: DrawImageRef, x: number, y: number, width: number, height: number, alpha: number): void;
+  /** Fill opaque pixels of the sprite with `color` (uses alpha as mask; preserves silhouette). */
+  drawImageTinted(image: DrawImageRef, x: number, y: number, width: number, height: number, color: string): void;
   /** Source rectangle in texture space (for sprite sheets). */
   drawImageRegion(
     image: DrawImageRef,

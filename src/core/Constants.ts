@@ -293,6 +293,16 @@ export const DIVE_BUTTON_Y =
   - DIVE_BUTTON_GAP
   - DIVE_BUTTON_HEIGHT;
 export const DIVE_BUTTON_LABEL_Y_OFFSET = 3;
+
+/** In-game only: round music mute control (bottom-right). */
+export const IN_GAME_MUSIC_BUTTON_DIAM = 52;
+export const IN_GAME_MUSIC_BUTTON_MARGIN = 14;
+
+export function getInGameMusicButtonRect(): { x: number; y: number; w: number; h: number } {
+  const d = IN_GAME_MUSIC_BUTTON_DIAM;
+  const m = IN_GAME_MUSIC_BUTTON_MARGIN;
+  return { x: CANVAS_WIDTH - m - d, y: CANVAS_HEIGHT - m - d, w: d, h: d };
+}
 export const NET_COST = 30;
 export const BAIT_COST = 45;
 export const NET_MAX_STOCK = 3;
@@ -302,6 +312,19 @@ export const NET_VFX_FADE_SEC = 0.32;
 export const NET_VFX_TOTAL_SEC = NET_VFX_SLIDE_GROW_SEC + NET_VFX_FADE_SEC;
 /** Fish are resolved the frame elapsed reaches this (full cover, before fade dominates). */
 export const NET_VFX_CATCH_AT_SEC = NET_VFX_SLIDE_GROW_SEC;
+
+/** Scripted shark FTUE intro ("tap to fight"): one full breathe cycle (ease in-out). */
+export const FTUE_SHARK_PULSE_PERIOD_SEC = 1;
+/** Peak ± deviation from base `drawScale` (multiplicative). */
+export const FTUE_SHARK_PULSE_SCALE_AMPLITUDE = 0.065;
+
+/** Smooth scale multiplier for the frozen shark FTUE beat (`elapsedSec` from sim time). */
+export function getFtueSharkPulseScaleFactor(elapsedSec: number): number {
+  const period = FTUE_SHARK_PULSE_PERIOD_SEC;
+  const u = period > 1e-6 ? (elapsedSec % period) / period : 0;
+  const smooth = 0.5 - 0.5 * Math.cos(u * Math.PI * 2);
+  return 1 + FTUE_SHARK_PULSE_SCALE_AMPLITUDE * (smooth * 2 - 1);
+}
 
 /** First-person harpoon gun: slides up from below screen on fire, then settles back. */
 export const HARPOON_GUN_ANIM_RISE_SEC = 0.12;

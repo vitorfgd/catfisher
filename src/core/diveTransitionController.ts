@@ -95,7 +95,15 @@ function breachSegmentEnds(): {
 
 export function isBreachLeaderboardListening(state: FullGameState): boolean {
   if (state.phase !== GamePhase.Breaching) return false;
-  return state.breachTimer >= breachSegmentEnds().leaderboardStart;
+  return state.breachTimer >= breachSegmentEnds().leaderboardStart
+    && !state.breachLeaderboardDismissed;
+}
+
+export function isBreachLeaderboardVisible(state: FullGameState): boolean {
+  if (state.phase !== GamePhase.Breaching) return false;
+  if (state.breachTimer < breachSegmentEnds().leaderboardStart) return false;
+  return !state.breachLeaderboardDismissed
+    || state.breachLeaderboardFadeElapsed < DIVE_TRANSITION.breachLeaderboardFadeDuration;
 }
 
 function spawnBubbleCluster(state: FullGameState, surfaceDrawH: number): void {

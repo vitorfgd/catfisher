@@ -35,6 +35,7 @@ import {
   BAIT_SCHOOL_FISH_COUNT,
   CANVAS_WIDTH,
   CANVAS_HEIGHT,
+  getInGameMusicButtonRect,
   OCEAN_BREACH_TOTAL_SEC,
   TREASURE_REVEAL_AWARD_AT_SEC,
   TREASURE_REVEAL_DURATION_SEC,
@@ -94,6 +95,7 @@ import {
   getBossSpearDamage,
   CATCH_FLASH_CAP,
   CATCH_FLASH_DECAY,
+  getFtueSharkPulseScaleFactor,
 } from './Constants';
 import {
   getAllUpgradeCosts,
@@ -138,6 +140,28 @@ import {
 } from './ParticleSystem';
 
 const TUTORIAL_HINT_DURATION_SEC = 4.2;
+
+function pointInMusicMuteButton(canvasX: number, canvasY: number): boolean {
+  const r = getInGameMusicButtonRect();
+  return canvasX >= r.x && canvasY >= r.y && canvasX <= r.x + r.w && canvasY <= r.y + r.h;
+}
+
+function filterMusicMuteTaps(state: FullGameState, commands: GameInputCommand[]): GameInputCommand[] {
+  const out: GameInputCommand[] = [];
+  for (const c of commands) {
+    if (c.type === 'tap' && pointInMusicMuteButton(c.x, c.y)) {
+      state.musicMuted = !state.musicMuted;
+      continue;
+    }
+    out.push(c);
+  }
+  return out;
+}
+
+/** Called once at boot after `createInitialState` (browser reads localStorage). */
+export function applyMusicMutedPreference(state: FullGameState, muted: boolean): void {
+  state.musicMuted = muted;
+}
 const CATCH_COIN_BURST_LIFE_SEC = 0.78;
 const FTUE_FISH_LESSON_SPAWN_SEC = 0.6;
 const FTUE_FISH_LESSON_WAIT_AFTER_CATCH_SEC = 3.5;
@@ -219,6 +243,7 @@ function createFtueRuntimeState(): FullGameState['ftue'] {
     freeConsumablesGranted: false,
     usedNet: false,
     usedBait: false,
+    sharkFtuePulseT: 0,
   };
 }
 
@@ -606,6 +631,7 @@ export function createInitialState(): FullGameState {
     upgrades,
     consumables,
     ftueActive: false,
+    musicMuted: false,
     player: { x: PLAYER_X, y: PLAYER_Y, aimAngle: -Math.PI / 2, shootCooldown: 0 },
     spears: [],
     fish: [],
@@ -980,6 +1006,16 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
   }
   updateFtueOxygenLessonFish(state, dt);
 
+  if (
+    state.ftue.stage === 'sharkEncounter'
+    && state.ftueActive
+    && state.ftue.prompt === 'tapFightBack'
+  ) {
+    state.ftue.sharkFtuePulseT += dt;
+  }
+
+  const gameplayCommands = filterMusicMuteTaps(state, commands);
+
   if (state.ftue.stage === 'sharkEncounter' && state.ftueActive) {
     if (!commands.some((command) => command.type === 'tap')) {
       return ACTION_PAUSED;
@@ -1088,7 +1124,7 @@ function updateAction(state: FullGameState, dt: number, commands: GameInputComma
     state.pendingEvents.push({ type: 'ftueOxygenLessonShown' });
   }
 
-  for (const command of commands) {
+  for (const command of gameplayCommands) {
     // Consumable use
     if (command.type === 'useConsumable') {
       if (
@@ -1760,11 +1796,21 @@ function buildFishRenderState(state: FullGameState): RenderState['fish'] {
         : getSharkHitsToKill(state.upgrades.speargun)
       : undefined;
     const sharkHp = current.type === FishType.Large ? (current.hitPoints ?? sharkMaxHp) : undefined;
+    let drawScale = current.drawScale ?? 1;
+    if (
+      current.type === FishType.Large
+      && current.alive
+      && state.ftue.stage === 'sharkEncounter'
+      && state.ftue.prompt === 'tapFightBack'
+      && state.ftueActive
+    ) {
+      drawScale *= getFtueSharkPulseScaleFactor(state.ftue.sharkFtuePulseT);
+    }
     fishRenderState.push({
       x: current.x,
       y: current.y,
       type: current.type,
-      drawScale: current.drawScale,
+      drawScale,
       hitFlash: current.hitFlash,
       facingLeft: current.vx > 0,  // sprites face LEFT natively — flip when moving right
       rotation,
@@ -1824,6 +1870,7 @@ export function getRenderState(state: FullGameState): RenderState {
 
   return {
     phase: state.phase,
+    musicMuted: state.musicMuted,
     ftueActive: ftue,
     ftueStage: state.ftue.stage,
     ftuePrompt: state.ftue.prompt,

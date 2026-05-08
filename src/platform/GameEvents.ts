@@ -14,4 +14,6 @@ export interface AudioAdapter {
   syncBoatMenuAmbient(active: boolean): void;
   /** Browser: loop underwater bed while `true` (`Diving` / `Action` / `Breaching`). */
   syncUnderwaterAmbient(active: boolean): void;
+  /** Browser: mute/unmute background music (sample loops stay unchanged). */
+  syncMusicMuted(muted: boolean): void;
 }

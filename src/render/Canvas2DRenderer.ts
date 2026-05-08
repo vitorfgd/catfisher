@@ -4,12 +4,28 @@
 import type { DrawImageRef, GameRenderer, TextStyle } from './GameRenderer';
 
 export class Canvas2DRenderer implements GameRenderer {
+  private tintCanvas: HTMLCanvasElement | null = null;
+  private tintCtx: CanvasRenderingContext2D | null = null;
+
   constructor(
     private readonly ctx: CanvasRenderingContext2D,
     private readonly images: Record<string, HTMLImageElement>,
     private readonly width: number,
     private readonly height: number,
   ) {}
+
+  private getTintContext(width: number, height: number): CanvasRenderingContext2D | null {
+    if (this.tintCanvas == null) {
+      this.tintCanvas = document.createElement('canvas');
+      this.tintCtx = this.tintCanvas.getContext('2d');
+    }
+    if (this.tintCtx == null || this.tintCanvas == null) return null;
+    if (this.tintCanvas.width !== width || this.tintCanvas.height !== height) {
+      this.tintCanvas.width = width;
+      this.tintCanvas.height = height;
+    }
+    return this.tintCtx;
+  }
 
   clear(): void {
     this.ctx.clearRect(0, 0, this.width, this.height);
@@ -118,6 +134,25 @@ export class Canvas2DRenderer implements GameRenderer {
     this.ctx.globalAlpha = alpha;
     this.ctx.drawImage(img, x, y, width, height);
     this.ctx.restore();
+  }
+
+  drawImageTinted(image: DrawImageRef, x: number, y: number, width: number, height: number, color: string): void {
+    const img = this.images[image.id];
+    if (img == null) return;
+    const tintW = Math.max(1, Math.ceil(width));
+    const tintH = Math.max(1, Math.ceil(height));
+    const tintCtx = this.getTintContext(tintW, tintH);
+    if (tintCtx == null || this.tintCanvas == null) return;
+
+    tintCtx.clearRect(0, 0, tintW, tintH);
+    tintCtx.globalCompositeOperation = 'source-over';
+    tintCtx.drawImage(img, 0, 0, tintW, tintH);
+    tintCtx.globalCompositeOperation = 'source-in';
+    tintCtx.fillStyle = color;
+    tintCtx.fillRect(0, 0, tintW, tintH);
+    tintCtx.globalCompositeOperation = 'source-over';
+
+    this.ctx.drawImage(this.tintCanvas, x, y, width, height);
   }
 
   drawImageRegion(

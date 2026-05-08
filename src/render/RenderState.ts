@@ -97,6 +97,8 @@ export interface RenderFishState {
 
 export interface RenderState {
   phase: GamePhase;
+  /** Action phase: background music user mute (for icon + sync). */
+  musicMuted: boolean;
 
   /** First-dive Reels-style tutorial (frozen fish until first tap) */
   ftueActive: boolean;

@@ -5,23 +5,17 @@ import type { GameEvent } from '../core/Types';
 import { FishType } from '../core/Types';
 import type { AudioAdapter } from './GameEvents';
 
-/** Peak linear gain after fade-in (`playDiverEntryPercussion`). */
+/** Browser media element volume for the preloaded diver splash sample. */
 const SPLASH_TARGET_GAIN = 0.35;
-/** Quick fade-in on splash sample (seconds). */
-const SPLASH_FADE_IN_SEC = 0.085;
 
-/** Voices for harpoon OG so rapid fire / first decode don’t steal one element. */
-const HARPOON_VOICE_COUNT = 4;
-/** Slightly below full-scale (OGG can be hot). */
-const HARPOON_FIRE_VOLUME = 0.82;
+const BGM_VOLUME = 0.12;
 
 export class BrowserAudioAdapter implements AudioAdapter {
   private ctx: AudioContext | null = null;
   private readonly backgroundMusic: HTMLAudioElement | null;
-  private readonly harpoonVoices: HTMLAudioElement[] = [];
-  private harpoonVoiceIndex = 0;
-  private readonly diverEntryPercSrc: string | null = null;
-  private readonly waterlineBubblesSrc: string | null = null;
+  private musicMuted = false;
+  private readonly diverEntryPercussion: HTMLAudioElement | null = null;
+  private readonly waterlineBubbles: HTMLAudioElement | null = null;
   private readonly boatMenuLoop: HTMLAudioElement | null = null;
   private readonly underwaterLoop: HTMLAudioElement | null = null;
   private boatMenuAmbientWanted = false;
@@ -30,7 +24,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
 
   constructor(
     backgroundMusicSrc?: string,
-    harpoonFireSrc?: string,
     boatMenuLoopSrc?: string,
     diverEntryPercSrc?: string,
     waterlineBubblesSrc?: string,
@@ -39,17 +32,8 @@ export class BrowserAudioAdapter implements AudioAdapter {
     this.backgroundMusic = backgroundMusicSrc != null ? new Audio(backgroundMusicSrc) : null;
     if (this.backgroundMusic != null) {
       this.backgroundMusic.loop = true;
-      this.backgroundMusic.volume = 0.12;
+      this.backgroundMusic.volume = BGM_VOLUME;
       this.backgroundMusic.preload = 'auto';
-    }
-    if (harpoonFireSrc != null && harpoonFireSrc !== '') {
-      for (let i = 0; i < HARPOON_VOICE_COUNT; i += 1) {
-        const el = new Audio(harpoonFireSrc);
-        el.preload = 'auto';
-        el.volume = HARPOON_FIRE_VOLUME;
-        void el.load();
-        this.harpoonVoices.push(el);
-      }
     }
     if (boatMenuLoopSrc != null && boatMenuLoopSrc !== '') {
       const loop = new Audio(boatMenuLoopSrc);
@@ -59,16 +43,18 @@ export class BrowserAudioAdapter implements AudioAdapter {
       this.boatMenuLoop = loop;
     }
     if (diverEntryPercSrc != null && diverEntryPercSrc !== '') {
-      this.diverEntryPercSrc = diverEntryPercSrc;
-      const preload = new Audio(diverEntryPercSrc);
-      preload.preload = 'auto';
-      void preload.load();
+      const clip = new Audio(diverEntryPercSrc);
+      clip.volume = SPLASH_TARGET_GAIN;
+      clip.preload = 'auto';
+      clip.load();
+      this.diverEntryPercussion = clip;
     }
     if (waterlineBubblesSrc != null && waterlineBubblesSrc !== '') {
-      this.waterlineBubblesSrc = waterlineBubblesSrc;
-      const preload = new Audio(waterlineBubblesSrc);
-      preload.preload = 'auto';
-      void preload.load();
+      const clip = new Audio(waterlineBubblesSrc);
+      clip.volume = 0.8;
+      clip.preload = 'auto';
+      clip.load();
+      this.waterlineBubbles = clip;
     }
     if (underwaterLoopSrc != null && underwaterLoopSrc !== '') {
       const loop = new Audio(underwaterLoopSrc);
@@ -91,6 +77,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
   private startBackgroundMusic(): void {
     if (this.backgroundMusic == null || this.backgroundMusicStarted) return;
     this.backgroundMusicStarted = true;
+    this.backgroundMusic.volume = this.musicMuted ? 0 : BGM_VOLUME;
     void this.backgroundMusic.play().catch(() => {
       // Browsers can block playback until a user gesture; retry on the next event.
       this.backgroundMusicStarted = false;
@@ -134,6 +121,13 @@ export class BrowserAudioAdapter implements AudioAdapter {
     }
   }
 
+  syncMusicMuted(muted: boolean): void {
+    this.musicMuted = muted;
+    if (this.backgroundMusic != null) {
+      this.backgroundMusic.volume = muted ? 0 : BGM_VOLUME;
+    }
+  }
+
   private playTone(
     freq: number,
     duration: number,
@@ -158,70 +152,26 @@ export class BrowserAudioAdapter implements AudioAdapter {
   }
 
   private playDiverEntryPercussion(): void {
-    if (this.diverEntryPercSrc == null) return;
+    if (this.diverEntryPercussion == null) return;
     try {
-      const ctx = this.getCtx();
-      void ctx.resume();
-
-      const clip = new Audio(this.diverEntryPercSrc);
-      clip.volume = 1;
-
-      const source = ctx.createMediaElementSource(clip);
-      const gainNode = ctx.createGain();
-      source.connect(gainNode);
-      gainNode.connect(ctx.destination);
-
-      const t0 = ctx.currentTime;
-      gainNode.gain.setValueAtTime(0, t0);
-      gainNode.gain.linearRampToValueAtTime(SPLASH_TARGET_GAIN, t0 + SPLASH_FADE_IN_SEC);
-
-      const cleanup = (): void => {
-        source.disconnect();
-        gainNode.disconnect();
-      };
-      clip.addEventListener('ended', cleanup, { once: true });
-
-      void clip.play().catch(() => {
-        cleanup();
-      });
-    } catch {
-      try {
-        const clip = new Audio(this.diverEntryPercSrc);
-        clip.volume = SPLASH_TARGET_GAIN;
-        void clip.play().catch(() => {});
-      } catch {
-        // Ignore decode / playback failures.
-      }
-    }
-  }
-
-  private playWaterlineBubbleChurn(): void {
-    if (this.waterlineBubblesSrc == null) return;
-    try {
-      const clip = new Audio(this.waterlineBubblesSrc);
-      clip.volume = 0.8;
-      void clip.play().catch(() => {});
+      this.diverEntryPercussion.pause();
+      this.diverEntryPercussion.currentTime = 0;
+      this.diverEntryPercussion.volume = SPLASH_TARGET_GAIN;
+      void this.diverEntryPercussion.play().catch(() => {});
     } catch {
       // Ignore decode / playback failures.
     }
   }
 
-  private playHarpoonFire(): void {
-    void this.getCtx().resume();
-    if (this.harpoonVoices.length === 0) {
-      this.playTone(165, 0.08, 0.1, 'square');
-      return;
-    }
+  private playWaterlineBubbleChurn(): void {
+    if (this.waterlineBubbles == null) return;
     try {
-      const clip = this.harpoonVoices[this.harpoonVoiceIndex];
-      this.harpoonVoiceIndex = (this.harpoonVoiceIndex + 1) % this.harpoonVoices.length;
-      clip.volume = HARPOON_FIRE_VOLUME;
-      clip.currentTime = 0;
-      void clip.play().catch(() => {
-        this.playTone(165, 0.08, 0.1, 'square');
-      });
+      this.waterlineBubbles.pause();
+      this.waterlineBubbles.currentTime = 0;
+      this.waterlineBubbles.volume = 0.8;
+      void this.waterlineBubbles.play().catch(() => {});
     } catch {
-      this.playTone(165, 0.08, 0.1, 'square');
+      // Ignore decode / playback failures.
     }
   }
 
@@ -254,7 +204,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
         break;
       }
       case 'spearFired':
-        this.playHarpoonFire();
         break;
       case 'diveStarted':
         this.playTone(220, 0.35, 0.15, 'sine');

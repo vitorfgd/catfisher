@@ -43,10 +43,11 @@ export const BrowserAssetManifest = {
     [AssetIds.diverStand]: 'assets/diver_stand.png',
     [AssetIds.diverJump]: 'assets/diver_jump.png',
     [AssetIds.gun1]: 'assets/gun_1.png',
+    [AssetIds.iconMusicOn]: 'assets/ui-music-on.png',
+    [AssetIds.iconMusicOff]: 'assets/ui-music-off.png',
   },
   sounds: {
     backgroundMusic: 'assets/background-music.mp3',
-    harpoonFire: 'assets/harpoon-fire.ogg',
     boatMenuAmbient: 'assets/boat-menu-ambient.ogg',
     /** Menu→game: one-shot ~1s after the diver leaves the deck (`diverJumped`). */
     diverEntryPerc: 'assets/dive-entry-perc.wav',
