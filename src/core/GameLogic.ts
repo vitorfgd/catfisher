@@ -647,6 +647,7 @@ export function createInitialState(): FullGameState {
     breachTimer: 0,
     oceanBubbles: [],
     diveJumpSfxPlayed: false,
+    diveSplashEmitted: false,
     breachLeaderboardDismissed: false,
     breachLeaderboardFadeElapsed: 0,
     upgradeBackHighlightTimer: 0,
@@ -721,6 +722,8 @@ function beginBreaching(state: FullGameState): void {
 function finalizeRunToBoat(state: FullGameState): void {
   clearNetVfxApplyingIfNeeded(state, getGameRng());
   state.diveJumpSfxPlayed = false;
+  state.diveSplashEmitted = false;
+  state.diveTimer = 0;
   state.phase = GamePhase.Boat;
   state.lastRunEarnings = state.sessionEarnings;
   state.lastRunDurationSec = state.sessionTime;
@@ -1775,6 +1778,29 @@ function buildFishRenderState(state: FullGameState): RenderState['fish'] {
   return fishRenderState;
 }
 
+/**
+ * Suppress spear/combo/+O₂ HUD stripes whenever sim time is frozen for FTUE or treasure reveal,
+ * matching the `ACTION_PAUSED` branches and gated blocks in {@link update}.
+ */
+function shouldSuppressGameplayHudMessages(state: FullGameState): boolean {
+  if (state.phase !== GamePhase.Action) return false;
+  if (state.treasureReveal != null) return true;
+
+  const { ftue } = state;
+  if (state.ftueActive && ftue.stage === 'sharkEncounter') return true;
+  if (ftue.stage === 'firstFishCatch') return true;
+  if (ftue.stage === 'firstTreasureIntro') return true;
+  if (ftue.stage === 'firstTreasureCatch') return true;
+  if (ftue.oxygenLessonFishId != null) return true;
+  if (
+    ftue.stage === 'secondDiveConsumables'
+    && (ftue.prompt === 'useBait' || ftue.prompt === 'useNet')
+  ) {
+    return true;
+  }
+  return false;
+}
+
 export function getRenderState(state: FullGameState): RenderState {
   const hasSpear = state.spears.length > 0;
   const carryingFish = state.spears.some((spear) => spear.caughtFishType !== null);
@@ -1882,6 +1908,7 @@ export function getRenderState(state: FullGameState): RenderState {
     sessionEarnings: state.sessionEarnings,
     sessionCatchCount: state.sessionCatchCount,
     harpoonStatus,
+    suppressGameplayHudMessages: shouldSuppressGameplayHudMessages(state),
     reloadFraction: state.player.shootCooldown > 0
       ? 1 - Math.min(1, state.player.shootCooldown / getShootCooldown(state.upgrades))
       : 1,

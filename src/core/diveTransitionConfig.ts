@@ -5,13 +5,19 @@
  * Legacy names in `Constants.ts` (`OCEAN_TRANSITION_*`, `OCEAN_DIVE_TOTAL_SEC`, …)
  * are derived from these values so other modules keep stable imports.
  */
+/** Menu→game fall duration; breach boat return uses the same timing (reversed easing). */
+const DIVER_FALL_DURATION_SEC = 1.05 as const;
+
+/** Simulated seconds on `diveTimer` before `diverSplash` (menu→ocean); authored as ms for authoring convenience. */
+export const GO_FISH_SPLASH_DELAY_MS = 1000;
+
 export const DIVE_TRANSITION = {
   /** Menu→game: extra boat background fades in over the UI while the diver idles. */
   boatFadeInDuration: 0.35,
   /** Menu→game: hold diver standing on deck before jump. */
   diverJumpDelay: 0.15,
-  /** Menu→game: diver falls toward the water (ease-in on Y). */
-  diverFallDuration: 1.05,
+  /** Menu→game: diver falls toward the water (ease-in quad on Y). */
+  diverFallDuration: DIVER_FALL_DURATION_SEC,
   diverFallDistance: 980,
   /** Waterline begins this many seconds before the fall pose finishes, so it can engulf the diver. */
   waterlineLeadInDuration: 0.78,
@@ -41,8 +47,10 @@ export const DIVE_TRANSITION = {
   breachLeaderboardDelayDuration: 0.5,
   /** Game→menu: leaderboard fades away after tap before the waterline transition starts. */
   breachLeaderboardFadeDuration: 0.28,
-  /** Game→menu: fade full boat screen before `Boat` phase. */
-  breachBoatRevealDuration: 0.33,
+  /** Game→menu: boat + diver land-in (same length as `diverFallDuration`, reversed ease). */
+  breachBoatRevealDuration: DIVER_FALL_DURATION_SEC,
+  /** Game→menu: fades stats / GO FISH after diver lands (`breach` `moveEnd`). */
+  breachBoatMenuFadeInDuration: 0.42,
   /** Bubble clusters spawned per second while the waterline moves (dive + breach). */
   bubbleSpawnRate: 14,
   /** Horizontal scroll speed for `vfxWaterSurface` during the move segment (px/s). */

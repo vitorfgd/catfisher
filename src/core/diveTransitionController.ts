@@ -9,7 +9,8 @@
  *   as the seam travels upward — same idea as a video-editing wipe with an animated edge).
  * The strip + vertical gradient + bubbles draw on top for juice.
  *
- * Game → Menu inverts parent motion (seam moves downward) and omits the diver.
+ * Game → Menu inverts parent motion (seam moves downward) and mirrors the diver jump onto the deck
+ * during `breachBoatRevealDuration`.
  */
 
 import type { DiveTransitionDraw } from '../render/RenderState';
@@ -23,7 +24,14 @@ import {
   OCEAN_SURFACE_NATURAL_H,
   OCEAN_SURFACE_NATURAL_W,
 } from './Constants';
-import { DIVE_TRANSITION, GAME_TO_MENU_BREACH_TOTAL_SEC, getMenuToGameDiveSegmentEnds } from './diveTransitionConfig';
+import {
+  DIVE_TRANSITION,
+  GAME_TO_MENU_BREACH_TOTAL_SEC,
+  GO_FISH_SPLASH_DELAY_MS,
+  getMenuToGameDiveSegmentEnds,
+} from './diveTransitionConfig';
+
+const GO_FISH_SPLASH_DELAY_SEC = GO_FISH_SPLASH_DELAY_MS / 1000;
 import { getGameRng } from './GameRng';
 import { FishType, GamePhase, type FullGameState } from './Types';
 
@@ -40,6 +48,11 @@ function easeOutCubic(t: number): number {
 function easeInQuad(t: number): number {
   const u = Math.min(1, Math.max(0, t));
   return u * u;
+}
+
+function easeOutQuad(t: number): number {
+  const u = Math.min(1, Math.max(0, t));
+  return 1 - (1 - u) ** 2;
 }
 
 function oceanSurfaceLayout(): { surfaceDrawH: number; surfaceDrawW: number; scrollRange: number } {
@@ -115,6 +128,7 @@ export function playMenuToGameTransition(state: FullGameState): void {
   state.diveTimer = 0;
   state.oceanBubbles = [];
   state.diveJumpSfxPlayed = false;
+  state.diveSplashEmitted = false;
   state.pendingEvents.push({ type: 'diveStarted' });
 }
 
@@ -150,8 +164,17 @@ function updateDivingTransition(state: FullGameState, dt: number): void {
     state.pendingEvents.push({ type: 'diverJumped' });
   }
 
+  if (!state.diveSplashEmitted && t >= GO_FISH_SPLASH_DELAY_SEC) {
+    state.diveSplashEmitted = true;
+    state.pendingEvents.push({ type: 'diverSplash' });
+  }
+
   // Bubbles while waterline moves
+  const wasMove = prevT >= seg.waterlineStart && prevT < seg.moveEnd;
   const inMove = t >= seg.waterlineStart && t < seg.moveEnd;
+  if (inMove && !wasMove) {
+    state.pendingEvents.push({ type: 'transitionWaterlineBubbles' });
+  }
   if (inMove) {
     const expected = D.bubbleSpawnRate * dt;
     let nSpawn = Math.floor(expected);
@@ -188,6 +211,7 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
     }
   }
 
+  const prevTb = state.breachTimer;
   state.breachTimer += dt;
   const t = state.breachTimer;
 
@@ -212,8 +236,14 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
     }
   }
 
-  const inMove = t >= seg.fadeEnd && t < seg.moveEnd;
-  if (inMove) {
+  // Sound + bubbles: start with the waterline phase (strip fade-in at yEnd), not when physics starts at fadeEnd.
+  const inWaterlineChurn = t >= seg.leaderboardStart && t < seg.moveEnd;
+  const firstTickAfterLeaderboardGate =
+    prevTb <= seg.leaderboardStart + 1e-5 && t > seg.leaderboardStart && t < seg.moveEnd;
+  if (firstTickAfterLeaderboardGate) {
+    state.pendingEvents.push({ type: 'transitionWaterlineBubbles' });
+  }
+  if (inWaterlineChurn) {
     const expected = D.bubbleSpawnRate * dt;
     let nSpawn = Math.floor(expected);
     if (rng.next() < expected - nSpawn) nSpawn += 1;
@@ -281,6 +311,53 @@ function buildWaterlineDiving(t: number): {
     };
   }
   return null;
+}
+
+/** Game→menu: diver rises from jump depth toward deck (mirrors menu→game `easeInQuad` fall with `easeOutQuad`). */
+function buildDiverBreachingLand(t: number): DiveTransitionDraw['diver'] | null {
+  const seg = breachSegmentEnds();
+  const R = DIVE_TRANSITION.breachBoatRevealDuration;
+  const revealStart = seg.moveEnd - R;
+  if (t < revealStart || t >= seg.moveEnd) return null;
+
+  const landT = Math.min(1, Math.max(0, (t - revealStart) / Math.max(1e-6, R)));
+  const landU = easeOutQuad(landT);
+
+  const D = DIVE_TRANSITION;
+  const boat = getBoatBackgroundDrawRect();
+  const anchorX = boat.x + D.diverDeckAnchor.xFrac * boat.w;
+  const anchorY = boat.y + D.diverDeckAnchor.yFrac * boat.h;
+  const standW = D.diverDrawWidth;
+  const standH = (standW * D.diverStandNaturalH) / D.diverStandNaturalW;
+  const jumpW = D.diverDrawWidth * 1.05;
+  const jumpH = (jumpW * D.diverJumpNaturalH) / D.diverJumpNaturalW;
+  const standPivot = D.diverStandFeetPivotY;
+  const jumpPivot = D.diverJumpFeetPivotY;
+
+  const feetY = anchorY + D.diverFallDistance * (1 - landU);
+  const standSnapPx = Math.max(6, D.diverFallDistance * 0.012);
+  if (feetY <= anchorY + standSnapPx) {
+    return {
+      pose: 'stand',
+      x: anchorX - standW * 0.5,
+      y: anchorY - standH * standPivot,
+      alpha: 1,
+      drawW: standW,
+      drawH: standH,
+    };
+  }
+
+  const y = feetY - jumpH * jumpPivot;
+  if (y > CANVAS_HEIGHT + jumpH) return null;
+
+  return {
+    pose: 'jump',
+    x: anchorX - jumpW * 0.5,
+    y,
+    alpha: 1,
+    drawW: jumpW,
+    drawH: jumpH,
+  };
 }
 
 function buildDiverDiving(t: number): DiveTransitionDraw['diver'] {
@@ -384,6 +461,13 @@ function getBreachBoatRevealAlphaFromT(t: number): number {
   return smooth01((t - revealStart) / Math.max(1e-6, R));
 }
 
+function getBreachBoatMenuRevealAlphaFromT(t: number): number {
+  const seg = breachSegmentEnds();
+  if (t < seg.moveEnd) return 0;
+  const menuFadeIn = DIVE_TRANSITION.breachBoatMenuFadeInDuration;
+  return smooth01((t - seg.moveEnd) / Math.max(1e-6, menuFadeIn));
+}
+
 function getBreachUiAlphaFromT(t: number): number {
   const seg = breachSegmentEnds();
   if (t <= 0) return 1;
@@ -463,6 +547,7 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
       oceanOverlayAlpha,
       breachShowBoatRevealOnly: false,
       breachBoatRevealAlpha: 0,
+      breachBoatMenuRevealAlpha: 1,
     };
   }
 
@@ -491,7 +576,7 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
     backdrop,
     waterline,
     bubbles,
-    diver: null,
+    diver: buildDiverBreachingLand(t),
     camera: null,
     breachUiAlpha: getBreachUiAlphaFromT(t),
     breachPlayerExitOffset: getBreachPlayerExitOffsetFromT(t),
@@ -502,5 +587,6 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
     oceanOverlayAlpha: 0,
     breachShowBoatRevealOnly,
     breachBoatRevealAlpha: getBreachBoatRevealAlphaFromT(t),
+    breachBoatMenuRevealAlpha: getBreachBoatMenuRevealAlphaFromT(t),
   };
 }
