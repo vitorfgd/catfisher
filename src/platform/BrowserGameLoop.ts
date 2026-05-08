@@ -47,6 +47,9 @@ export class BrowserGameLoop {
 
     renderFrame(this.renderer, getRenderState(this.state));
 
+    this.audio.syncBoatMenuAmbient(this.state.phase === GamePhase.Boat);
+    this.audio.syncUnderwaterAmbient(this.state.phase !== GamePhase.Boat);
+
     for (const event of drainEvents(this.state)) {
       if (event.type === 'ftueDiveExited') {
         markFtueDiveCompleteInStorage();

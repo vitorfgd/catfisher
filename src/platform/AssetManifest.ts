@@ -46,6 +46,14 @@ export const BrowserAssetManifest = {
   },
   sounds: {
     backgroundMusic: 'assets/background-music.mp3',
+    harpoonFire: 'assets/harpoon-fire.ogg',
+    boatMenuAmbient: 'assets/boat-menu-ambient.ogg',
+    /** Menu→game: one-shot ~1s after the diver leaves the deck (`diverJumped`). */
+    diverEntryPerc: 'assets/dive-entry-perc.wav',
+    /** Dive ↑ / breach ↓ waterline strip when churn bubbles spawn (`transitionWaterlineBubbles`). */
+    waterlineBubbles: 'assets/waterline-bubbles.wav',
+    /** Dive / gameplay / breach: looping depth bed (everything except boat menu). */
+    underwaterAmbient: 'assets/underwater-ambient.ogg',
   },
 } as const;
 

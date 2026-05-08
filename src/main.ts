@@ -82,7 +82,14 @@ async function main(): Promise<void> {
 
   const renderer = new Canvas2DRenderer(ctx, images, CANVAS_WIDTH, CANVAS_HEIGHT);
   const input = new BrowserInputAdapter(canvas);
-  const audio = new BrowserAudioAdapter(toPublicAssetUrl(BrowserAssetManifest.sounds.backgroundMusic));
+  const audio = new BrowserAudioAdapter(
+    toPublicAssetUrl(BrowserAssetManifest.sounds.backgroundMusic),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonFire),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.boatMenuAmbient),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.diverEntryPerc),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.waterlineBubbles),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.underwaterAmbient),
+  );
   const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();
   applyTutorialSeenState(gameState, readTutorialSeenState());

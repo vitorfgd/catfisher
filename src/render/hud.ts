@@ -218,7 +218,9 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
   const timeBonusH = timeBonusFontSize + 16;
   const timeBonusTop = comboTop + comboH + stackGap;
 
-  if (state.comboActive || DEBUG_SHOW_GAMEPLAY_MESSAGES) {
+  const hideStaleGameplayHud = state.suppressGameplayHudMessages;
+
+  if (!hideStaleGameplayHud && (state.comboActive || DEBUG_SHOW_GAMEPLAY_MESSAGES)) {
     const combo = displayComboCount;
     const pulse = Math.sin(Date.now() / 200);
     const alpha = ((state.comboActive ? 0.82 : 0.48) + 0.18 * pulse).toFixed(2);
@@ -234,7 +236,7 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
     renderer.drawText(`x${combo} COMBO`, cx - boxW / 2, cy - fontSize / 2 - 8, boxW, fontSize + 16, td(fontSize, color, 'center'));
   }
 
-  if (state.oxyBoostActive || DEBUG_SHOW_GAMEPLAY_MESSAGES) {
+  if (!hideStaleGameplayHud && (state.oxyBoostActive || DEBUG_SHOW_GAMEPLAY_MESSAGES)) {
     const p = Math.sin(Date.now() / 190);
     const alpha = ((state.oxyBoostActive ? 0.85 : 0.46) + 0.15 * p).toFixed(2);
     const glow = `rgba(80,220,255,${alpha})`;
@@ -244,10 +246,13 @@ export function drawHud(renderer: GameRenderer, state: RenderState): void {
   }
 
   if (
-    state.harpoonStatus === 'LOAD'
-    || state.harpoonStatus === 'REEL'
-    || state.harpoonStatus === 'HAUL'
-    || DEBUG_SHOW_GAMEPLAY_MESSAGES
+    !hideStaleGameplayHud
+    && (
+      state.harpoonStatus === 'LOAD'
+      || state.harpoonStatus === 'REEL'
+      || state.harpoonStatus === 'HAUL'
+      || DEBUG_SHOW_GAMEPLAY_MESSAGES
+    )
   ) {
     const p = Math.sin(Date.now() / 180);
     const isLoad = state.harpoonStatus === 'LOAD';

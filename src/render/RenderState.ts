@@ -30,7 +30,7 @@ export interface DiveTransitionDraw {
   backdrop: { boat: number; underwater: number } | null;
   waterline: DiveTransitionWaterline | null;
   bubbles: ReadonlyArray<{ variant: number; lx: number; ly: number; alpha: number }>;
-  /** Menu→game only; feet at deck anchor + fall offset. */
+  /** Boat→ocean: idle + jump fall. Ocean→boat: arc back onto deck during breach reveal (same envelope). */
   diver: {
     pose: 'stand' | 'jump';
     x: number;
@@ -60,6 +60,8 @@ export interface DiveTransitionDraw {
   oceanOverlayAlpha: number;
   breachShowBoatRevealOnly: boolean;
   breachBoatRevealAlpha: number;
+  /** Game→menu: `0` while diver climbs onto deck; then 0→1 (see `breachBoatMenuFadeInDuration`). */
+  breachBoatMenuRevealAlpha: number;
 }
 
 export interface RenderPlayerState {
@@ -129,6 +131,11 @@ export interface RenderState {
   sessionCatchCount: number;
   harpoonStatus: string;
   reloadFraction: number;  // 0 = just fired, 1 = ready to shoot
+  /**
+   * When true, hide stale combo / harpoon status / +O₂ HUD lines during frozen FTUE beats and treasure reveal.
+   * Mirrors gameplay-pause moments in {@link GameLogic.update}.
+   */
+  suppressGameplayHudMessages: boolean;
   comboCount: number;
   comboActive: boolean;
   oxyBoostActive: boolean;

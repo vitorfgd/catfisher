@@ -191,6 +191,10 @@ export type GameEvent =
   | { type: 'diveStarted' }
   /** Menu→game cinematic: diver leaves the deck (synth SFX). */
   | { type: 'diverJumped' }
+  /** Menu→game: water entry percussion at `GO_FISH_SPLASH_DELAY_MS` sim time (`diveTimer`). */
+  | { type: 'diverSplash' }
+  /** Dive / breach: waterline strip starts scrolling (bubble VFX churn). */
+  | { type: 'transitionWaterlineBubbles' }
   | { type: 'runEnded'; earnings: number; runDurationSec: number; catchCount: number }
   | { type: 'upgradeBought'; id: string }
   | { type: 'ftueDiveExited' }
@@ -318,6 +322,8 @@ export interface FullGameState {
   oceanBubbles: OceanBubbleParticle[];
   /** Menu→game: ensures `diverJumped` fires once per dive. */
   diveJumpSfxPlayed: boolean;
+  /** Menu→game: ensures `diverSplash` fires once per dive (handles missed frame edges + timer hygiene). */
+  diveSplashEmitted: boolean;
   /** Game→menu: player tapped to close the interstitial leaderboard. */
   breachLeaderboardDismissed: boolean;
   /** Game→menu: fade timer after leaderboard dismissal. */

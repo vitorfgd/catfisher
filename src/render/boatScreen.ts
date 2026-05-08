@@ -322,9 +322,19 @@ export function drawBoatStandingDiver(renderer: GameRenderer, alpha = 1): void {
   }
 }
 
-export function drawBoatSceneLayer(renderer: GameRenderer, alpha = 1): void {
+export function drawBoatSceneLayer(renderer: GameRenderer, state: RenderState, alpha = 1): void {
   drawBoatBackgroundLayer(renderer, alpha);
-  drawBoatStandingDiver(renderer, alpha);
+  const d = state.diveTransition?.diver;
+  if (d != null) {
+    const id = d.pose === 'stand' ? AssetIds.diverStand : AssetIds.diverJump;
+    if (alpha >= 0.999) {
+      renderer.drawImage({ id }, d.x, d.y, d.drawW, d.drawH);
+    } else if (alpha > 0.002) {
+      renderer.drawImageAlpha({ id }, d.x, d.y, d.drawW, d.drawH, alpha * d.alpha);
+    }
+  } else {
+    drawBoatStandingDiver(renderer, alpha);
+  }
 }
 
 /** Main-menu chrome (stats, upgrades, gear, go fish). */
@@ -491,6 +501,6 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {
-  drawBoatSceneLayer(renderer);
+  drawBoatSceneLayer(renderer, state);
   drawBoatMenuUi(renderer, state);
 }

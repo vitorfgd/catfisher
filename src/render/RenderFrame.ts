@@ -19,7 +19,7 @@ import {
   TREASURE_MONEY_LERP_SEC,
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
-import { drawBoatScreen } from './boatScreen';
+import { drawBoatMenuUi, drawBoatSceneLayer, drawBoatScreen } from './boatScreen';
 import {
   drawDiveBackdropWipe,
   drawDiveMaskedBackdrops,
@@ -941,7 +941,7 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
     renderer.drawText(entry.name, x + 92, rowY + 4, 170, 26, t(17, C.white, 'left', '800'));
     renderer.drawText(`${entry.fishCaught}`, x + w - 94, rowY + 4, 58, 26, tb(18, isPlayer ? C.gold : C.white, 'right'));
   }
-  renderer.drawText('Tap anywhere to continue', x, y + h - 50, w, 24, t(16, C.muted, 'center', '800'));
+  renderer.drawText('TAP ANYWHERE TO CONTINUE', x, y + h - 58, w, 36, tb(21, C.white, 'center'));
   renderer.popOpacity();
 }
 
@@ -992,6 +992,20 @@ function drawActionSurfaceOverlays(renderer: GameRenderer, state: RenderState): 
   drawCatchCoinBursts(renderer, state);
 }
 
+/** Breach: boat backdrop + diver use `breachBoatRevealAlpha`; menu fades in once diver is on deck. */
+function drawBreachingBoatScreen(renderer: GameRenderer, state: RenderState): void {
+  const dt = state.diveTransition;
+  if (dt == null) return;
+  const sceneA = dt.breachBoatRevealAlpha;
+  const menuA = dt.breachBoatRevealAlpha * dt.breachBoatMenuRevealAlpha;
+  drawBoatSceneLayer(renderer, state, sceneA);
+  if (menuA > 0.002) {
+    if (menuA < 0.999) renderer.pushOpacity(menuA);
+    drawBoatMenuUi(renderer, state);
+    if (menuA < 0.999) renderer.popOpacity();
+  }
+}
+
 export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   renderer.clear();
 
@@ -1006,10 +1020,7 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
   }
 
   if (state.phase === GamePhase.Breaching && state.diveTransition?.breachShowBoatRevealOnly) {
-    const a = state.diveTransition.breachBoatRevealAlpha;
-    if (a < 0.999) renderer.pushOpacity(a);
-    drawBoatScreen(renderer, state);
-    if (a < 0.999) renderer.popOpacity();
+    drawBreachingBoatScreen(renderer, state);
     return;
   }
 
@@ -1034,11 +1045,8 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
     // the boat background should already be visible beneath it.
     drawDiveBackdropWipe(renderer, state.diveTransition);
     drawBreachLeaderboardOverlay(renderer, state, state.diveTransition.breachLeaderboardAlpha);
-    const a = state.diveTransition.breachBoatRevealAlpha;
-    if (a > 0.002) {
-      if (a < 0.999) renderer.pushOpacity(a);
-      drawBoatScreen(renderer, state);
-      if (a < 0.999) renderer.popOpacity();
+    if (state.diveTransition.breachBoatRevealAlpha > 0.002) {
+      drawBreachingBoatScreen(renderer, state);
     }
     drawDiveWaterlineVfx(renderer, state.diveTransition);
   }
