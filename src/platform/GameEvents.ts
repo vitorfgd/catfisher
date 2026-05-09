@@ -10,6 +10,8 @@ export interface InputAdapter {
 
 export interface AudioAdapter {
   handleEvent(event: import('../core/Types').GameEvent): void;
+  /** Browser: loop background music only while gameplay is active. */
+  syncBackgroundMusic(active: boolean): void;
   /** Browser: loop menu ambience while `true` (e.g. `GamePhase.Boat`). */
   syncBoatMenuAmbient(active: boolean): void;
   /** Browser: loop underwater bed while `true` (`Diving` / `Action` / `Breaching`). */

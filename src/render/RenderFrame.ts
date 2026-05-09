@@ -978,8 +978,8 @@ function drawDiveStylePrimaryButton(
 function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState, alpha: number): void {
   if (alpha <= 0.004) return;
 
-  const BREACH_LOGO_TOP_FRAC = 0.076;
-  const BREACH_CARD_TOP_FRAC = 0.452;
+  const BREACH_LOGO_TOP_FRAC = 0.1;
+  const BREACH_CARD_TOP_FRAC = 0.415;
   /** Matches horizontal inset `(CANVAS_WIDTH - w) / 2` for the leaderboard card. */
   const BREACH_CARD_SIDE_MARGIN = 36;
 
@@ -993,11 +993,7 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
   const logoW = Math.min(390, CANVAS_WIDTH - 34);
   const logoH = logoW / 1.58;
   const logoTop = CANVAS_HEIGHT * BREACH_LOGO_TOP_FRAC;
-  const logoBottom = logoTop + logoH;
   renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, logoTop, logoW, logoH);
-
-  const gapMidY = (logoBottom + y) * 0.5 + 8;
-  drawBreachLeaderboardTapCueHand(renderer, CANVAS_WIDTH * 0.51 + 6, gapMidY);
 
   renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
   renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);
@@ -1030,7 +1026,12 @@ function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState
   const btnY = y + h - DIVE_BUTTON_HEIGHT - BREACH_CARD_SIDE_MARGIN;
   const loopPressed = Math.floor(Date.now() / 520) % 2 === 0;
   const pressY = loopPressed ? 5 : 0;
-  drawDiveStylePrimaryButton(renderer, btnX, btnY, btnW, 'TAP TO CONTINUE', pressY);
+  drawDiveStylePrimaryButton(renderer, btnX, btnY, btnW, 'CONTINUE', pressY);
+  drawBreachLeaderboardTapCueHand(
+    renderer,
+    btnX + btnW * 0.125,
+    btnY + pressY + DIVE_BUTTON_HEIGHT * 0.5,
+  );
 
   renderer.popOpacity();
 }

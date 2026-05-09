@@ -9,6 +9,9 @@ import type { AudioAdapter } from './GameEvents';
 const SPLASH_TARGET_GAIN = 0.35;
 
 const BGM_VOLUME = 0.12;
+const BGM_FADE_OUT_SEC = 1.35;
+const UNDERWATER_AMBIENT_VOLUME = 0.1;
+const UNDERWATER_AMBIENT_FADE_OUT_SEC = 1.2;
 
 export class BrowserAudioAdapter implements AudioAdapter {
   private ctx: AudioContext | null = null;
@@ -21,6 +24,9 @@ export class BrowserAudioAdapter implements AudioAdapter {
   private boatMenuAmbientWanted = false;
   private underwaterAmbientWanted = false;
   private backgroundMusicStarted = false;
+  private backgroundMusicWanted = false;
+  private backgroundMusicFadeFrame: number | null = null;
+  private underwaterAmbientFadeFrame: number | null = null;
 
   constructor(
     backgroundMusicSrc?: string,
@@ -38,7 +44,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
     if (boatMenuLoopSrc != null && boatMenuLoopSrc !== '') {
       const loop = new Audio(boatMenuLoopSrc);
       loop.loop = true;
-      loop.volume = 0.09;
+      loop.volume = 0.1;
       loop.preload = 'auto';
       this.boatMenuLoop = loop;
     }
@@ -59,7 +65,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
     if (underwaterLoopSrc != null && underwaterLoopSrc !== '') {
       const loop = new Audio(underwaterLoopSrc);
       loop.loop = true;
-      loop.volume = 0.1;
+      loop.volume = UNDERWATER_AMBIENT_VOLUME;
       loop.preload = 'auto';
       this.underwaterLoop = loop;
     }
@@ -75,8 +81,14 @@ export class BrowserAudioAdapter implements AudioAdapter {
   }
 
   private startBackgroundMusic(): void {
-    if (this.backgroundMusic == null || this.backgroundMusicStarted) return;
+    if (this.backgroundMusic == null) return;
+    this.cancelBackgroundMusicFade();
+    if (this.backgroundMusicStarted && !this.backgroundMusic.paused) {
+      this.backgroundMusic.volume = this.musicMuted ? 0 : BGM_VOLUME;
+      return;
+    }
     this.backgroundMusicStarted = true;
+    this.backgroundMusic.currentTime = 0;
     this.backgroundMusic.volume = this.musicMuted ? 0 : BGM_VOLUME;
     void this.backgroundMusic.play().catch(() => {
       // Browsers can block playback until a user gesture; retry on the next event.
@@ -84,14 +96,95 @@ export class BrowserAudioAdapter implements AudioAdapter {
     });
   }
 
-  /** After first user gesture: BGM plus boat menu loop if that screen is active. */
+  private cancelBackgroundMusicFade(): void {
+    if (this.backgroundMusicFadeFrame == null) return;
+    cancelAnimationFrame(this.backgroundMusicFadeFrame);
+    this.backgroundMusicFadeFrame = null;
+  }
+
+  private fadeOutBackgroundMusic(): void {
+    if (this.backgroundMusic == null || !this.backgroundMusicStarted || this.backgroundMusic.paused) return;
+    if (this.backgroundMusicFadeFrame != null) return;
+
+    const startedAt = performance.now();
+    const startVolume = this.backgroundMusic.volume;
+    const durationMs = BGM_FADE_OUT_SEC * 1000;
+
+    const step = (now: number): void => {
+      if (this.backgroundMusic == null || this.backgroundMusicWanted) {
+        this.backgroundMusicFadeFrame = null;
+        return;
+      }
+
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      this.backgroundMusic.volume = startVolume * (1 - progress);
+
+      if (progress >= 1) {
+        this.backgroundMusic.pause();
+        this.backgroundMusic.currentTime = 0;
+        this.backgroundMusicStarted = false;
+        this.backgroundMusicFadeFrame = null;
+        return;
+      }
+
+      this.backgroundMusicFadeFrame = requestAnimationFrame(step);
+    };
+
+    this.backgroundMusicFadeFrame = requestAnimationFrame(step);
+  }
+
+  private cancelUnderwaterAmbientFade(): void {
+    if (this.underwaterAmbientFadeFrame == null) return;
+    cancelAnimationFrame(this.underwaterAmbientFadeFrame);
+    this.underwaterAmbientFadeFrame = null;
+  }
+
+  private fadeOutUnderwaterAmbient(): void {
+    if (this.underwaterLoop == null || this.underwaterLoop.paused) return;
+    if (this.underwaterAmbientFadeFrame != null) return;
+
+    const startedAt = performance.now();
+    const startVolume = this.underwaterLoop.volume;
+    const durationMs = UNDERWATER_AMBIENT_FADE_OUT_SEC * 1000;
+
+    const step = (now: number): void => {
+      if (this.underwaterLoop == null || this.underwaterAmbientWanted) {
+        this.underwaterAmbientFadeFrame = null;
+        return;
+      }
+
+      const progress = Math.min(1, (now - startedAt) / durationMs);
+      this.underwaterLoop.volume = startVolume * (1 - progress);
+
+      if (progress >= 1) {
+        this.underwaterLoop.pause();
+        this.underwaterLoop.currentTime = 0;
+        this.underwaterAmbientFadeFrame = null;
+        return;
+      }
+
+      this.underwaterAmbientFadeFrame = requestAnimationFrame(step);
+    };
+
+    this.underwaterAmbientFadeFrame = requestAnimationFrame(step);
+  }
+
+  /** After first user gesture: loop ambient beds for the currently active screen. */
   private unlockAmbientAudio(): void {
-    this.startBackgroundMusic();
     if (this.boatMenuAmbientWanted && this.boatMenuLoop != null) {
       void this.boatMenuLoop.play().catch(() => {});
     }
     if (this.underwaterAmbientWanted && this.underwaterLoop != null) {
       void this.underwaterLoop.play().catch(() => {});
+    }
+  }
+
+  syncBackgroundMusic(active: boolean): void {
+    this.backgroundMusicWanted = active;
+    if (active) {
+      this.startBackgroundMusic();
+    } else {
+      this.fadeOutBackgroundMusic();
     }
   }
 
@@ -112,18 +205,19 @@ export class BrowserAudioAdapter implements AudioAdapter {
     this.underwaterAmbientWanted = active;
     if (this.underwaterLoop == null) return;
     if (active) {
+      this.cancelUnderwaterAmbientFade();
+      this.underwaterLoop.volume = UNDERWATER_AMBIENT_VOLUME;
       if (this.underwaterLoop.paused) {
         void this.underwaterLoop.play().catch(() => {});
       }
     } else {
-      this.underwaterLoop.pause();
-      this.underwaterLoop.currentTime = 0;
+      this.fadeOutUnderwaterAmbient();
     }
   }
 
   syncMusicMuted(muted: boolean): void {
     this.musicMuted = muted;
-    if (this.backgroundMusic != null) {
+    if (this.backgroundMusic != null && this.backgroundMusicWanted && this.backgroundMusicFadeFrame == null) {
       this.backgroundMusic.volume = muted ? 0 : BGM_VOLUME;
     }
   }

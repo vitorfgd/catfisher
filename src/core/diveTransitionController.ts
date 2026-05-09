@@ -471,9 +471,10 @@ function getBreachBoatRevealAlphaFromT(t: number): number {
 
 function getBreachBoatMenuRevealAlphaFromT(t: number): number {
   const seg = breachSegmentEnds();
-  if (t < seg.moveEnd) return 0;
   const menuFadeIn = DIVE_TRANSITION.breachBoatMenuFadeInDuration;
-  return smooth01((t - seg.moveEnd) / Math.max(1e-6, menuFadeIn));
+  const fadeStart = seg.moveEnd - menuFadeIn;
+  if (t < fadeStart) return 0;
+  return smooth01((t - fadeStart) / Math.max(1e-6, menuFadeIn));
 }
 
 function getBreachUiAlphaFromT(t: number): number {

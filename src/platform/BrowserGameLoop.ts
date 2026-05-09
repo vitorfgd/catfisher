@@ -4,7 +4,6 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
-import { isBreachLeaderboardVisible } from '../core/diveTransitionController';
 import { markFtueDiveCompleteInStorage, markFtueOxygenLessonSeenInStorage } from './FtueStorage';
 import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
@@ -57,9 +56,11 @@ export class BrowserGameLoop {
       this.persistedMusicMuted = this.state.musicMuted;
     }
     this.audio.syncMusicMuted(this.state.musicMuted);
+    this.audio.syncBackgroundMusic(this.state.phase === GamePhase.Action);
     this.audio.syncBoatMenuAmbient(this.state.phase === GamePhase.Boat);
     this.audio.syncUnderwaterAmbient(
-      this.state.phase !== GamePhase.Boat && !isBreachLeaderboardVisible(this.state),
+      this.state.phase !== GamePhase.Boat
+        && !(this.state.phase === GamePhase.Breaching && this.state.breachLeaderboardDismissed),
     );
 
     for (const event of drainEvents(this.state)) {

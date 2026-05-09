@@ -47,7 +47,7 @@ export const BrowserAssetManifest = {
     [AssetIds.iconMusicOff]: 'assets/ui-music-off.png',
   },
   sounds: {
-    backgroundMusic: 'assets/background-music.mp3',
+    backgroundMusic: 'assets/background-music.ogg',
     boatMenuAmbient: 'assets/boat-menu-ambient.ogg',
     /** Menu→game: one-shot ~1s after the diver leaves the deck (`diverJumped`). */
     diverEntryPerc: 'assets/dive-entry-perc.wav',

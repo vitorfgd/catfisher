@@ -5,7 +5,7 @@
  * Legacy names in `Constants.ts` (`OCEAN_TRANSITION_*`, `OCEAN_DIVE_TOTAL_SEC`, …)
  * are derived from these values so other modules keep stable imports.
  */
-/** Menu→game fall duration; breach boat return uses the same timing (reversed easing). */
+/** Menu→game fall duration. */
 const DIVER_FALL_DURATION_SEC = 1.05 as const;
 
 /** Simulated seconds on `diveTimer` before `diverSplash` (menu→ocean); authored as ms for authoring convenience. */
@@ -47,9 +47,9 @@ export const DIVE_TRANSITION = {
   breachLeaderboardDelayDuration: 0.5,
   /** Game→menu: leaderboard fades away after tap before the waterline transition starts. */
   breachLeaderboardFadeDuration: 0.28,
-  /** Game→menu: boat + diver land-in (same length as `diverFallDuration`, reversed ease). */
+  /** Game→menu: boat + diver land-in, ending exactly when the transition finalizes. */
   breachBoatRevealDuration: DIVER_FALL_DURATION_SEC,
-  /** Game→menu: fades stats / GO FISH after diver lands (`breach` `moveEnd`). */
+  /** Game→menu: fades stats / GO FISH in during the end of the diver landing. */
   breachBoatMenuFadeInDuration: 0.42,
   /** Bubble clusters spawned per second while the waterline moves (dive + breach). */
   bubbleSpawnRate: 14,
@@ -100,5 +100,4 @@ export const GAME_TO_MENU_BREACH_TOTAL_SEC =
   + DIVE_TRANSITION.breachFishEscapeDuration
   + DIVE_TRANSITION.breachLeaderboardDelayDuration
   + DIVE_TRANSITION.waterlineFadeOutDuration
-  + DIVE_TRANSITION.waterlineFallDuration
-  + DIVE_TRANSITION.breachBoatRevealDuration;
+  + DIVE_TRANSITION.waterlineFallDuration;
