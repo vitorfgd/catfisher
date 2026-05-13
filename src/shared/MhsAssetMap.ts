@@ -51,4 +51,6 @@ export const MHS_TEXTURE_PATHS = {
   [AssetIds.diverStand]: '@sprites/diver_stand.png',
   [AssetIds.diverJump]: '@sprites/diver_jump.png',
   [AssetIds.gun1]: '@sprites/gun_1.png',
+  [AssetIds.uiLeaderboard]: '@sprites/ui-leaderboard.png',
+  [AssetIds.endscreenSplashArt]: '@sprites/endscreen-splash-art.png',
 } as const satisfies Record<(typeof AssetIds)[keyof typeof AssetIds], `@sprites/${string}`>;

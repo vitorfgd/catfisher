@@ -93,17 +93,12 @@ function breachSegmentEnds(): {
   return { introEnd, playerExitStart, escapeEnd, leaderboardStart, fadeEnd, moveEnd, total };
 }
 
-export function isBreachLeaderboardListening(state: FullGameState): boolean {
-  if (state.phase !== GamePhase.Breaching) return false;
-  return state.breachTimer >= breachSegmentEnds().leaderboardStart
-    && !state.breachLeaderboardDismissed;
+export function isBreachLeaderboardListening(_state: FullGameState): boolean {
+  return false;
 }
 
-export function isBreachLeaderboardVisible(state: FullGameState): boolean {
-  if (state.phase !== GamePhase.Breaching) return false;
-  if (state.breachTimer < breachSegmentEnds().leaderboardStart) return false;
-  return !state.breachLeaderboardDismissed
-    || state.breachLeaderboardFadeElapsed < DIVE_TRANSITION.breachLeaderboardFadeDuration;
+export function isBreachLeaderboardVisible(_state: FullGameState): boolean {
+  return false;
 }
 
 function spawnBubbleCluster(state: FullGameState, surfaceDrawH: number): void {
@@ -147,6 +142,8 @@ export function playGameToMenuTransition(state: FullGameState): void {
   state.breachTimer = 0;
   state.oceanBubbles = [];
   state.harpoonGunAnimElapsed = -1;
+  state.breachLeaderboardDismissed = false;
+  state.breachLeaderboardFadeElapsed = 0;
 }
 
 export function updateDiveTransition(state: FullGameState, dt: number): void {
@@ -204,23 +201,12 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
   const { surfaceDrawH } = oceanSurfaceLayout();
   const seg = breachSegmentEnds();
   const D = DIVE_TRANSITION;
-  if (state.breachTimer >= seg.leaderboardStart) {
-    if (!state.breachLeaderboardDismissed) {
-      state.breachTimer = seg.leaderboardStart;
-      return;
-    }
-    if (state.breachLeaderboardFadeElapsed < D.breachLeaderboardFadeDuration) {
-      state.breachLeaderboardFadeElapsed = Math.min(
-        D.breachLeaderboardFadeDuration,
-        state.breachLeaderboardFadeElapsed + dt,
-      );
-      state.breachTimer = seg.leaderboardStart;
-      return;
-    }
-  }
 
   const prevTb = state.breachTimer;
   state.breachTimer += dt;
+  if (!state.breachLeaderboardDismissed && state.breachTimer > seg.fadeEnd) {
+    state.breachTimer = seg.fadeEnd;
+  }
   const t = state.breachTimer;
 
   if (t >= seg.introEnd && t < seg.escapeEnd) {
@@ -264,6 +250,10 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
     state.breachTimer = seg.total;
     state.oceanBubbles = [];
     // finalizeRunToBoat is still invoked from GameLogic after this check
+  }
+
+  if (state.breachLeaderboardDismissed) {
+    state.breachLeaderboardFadeElapsed += dt;
   }
 }
 
@@ -496,13 +486,23 @@ function getBreachCameraZoomFromT(t: number): number {
   return 1 + (DIVE_TRANSITION.breachCameraZoom - 1) * u;
 }
 
-function getBreachLeaderboardAlpha(state: FullGameState, t: number): number {
+function getBreachPlaceholderOverlayAlpha(state: FullGameState, t: number): number {
   const seg = breachSegmentEnds();
+  const D = DIVE_TRANSITION;
   if (t < seg.leaderboardStart) return 0;
-  if (!state.breachLeaderboardDismissed) return 1;
-  return 1 - smooth01(
-    state.breachLeaderboardFadeElapsed / Math.max(1e-6, DIVE_TRANSITION.breachLeaderboardFadeDuration),
-  );
+  const fadeIn = 0.12;
+  const alphaIn = smooth01(Math.min(1, (t - seg.leaderboardStart) / Math.max(1e-6, fadeIn)));
+  if (!state.breachLeaderboardDismissed) {
+    return Math.min(1, alphaIn);
+  }
+  const uOut = smooth01(Math.min(1, state.breachLeaderboardFadeElapsed / Math.max(1e-6, D.breachLeaderboardFadeDuration)));
+  return alphaIn * (1 - uOut);
+}
+
+export function isBreachingAwaitingConfirm(state: FullGameState): boolean {
+  if (state.phase !== GamePhase.Breaching || state.breachLeaderboardDismissed) return false;
+  const seg = breachSegmentEnds();
+  return state.breachTimer >= seg.leaderboardStart + 0.12;
 }
 
 export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDraw | null {
@@ -590,7 +590,7 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
     breachUiAlpha: getBreachUiAlphaFromT(t),
     breachPlayerExitOffset: getBreachPlayerExitOffsetFromT(t),
     breachCameraZoom: getBreachCameraZoomFromT(t),
-    breachLeaderboardAlpha: getBreachLeaderboardAlpha(state, t),
+      breachLeaderboardAlpha: getBreachPlaceholderOverlayAlpha(state, t),
     boatOverlayAlpha: 0,
     menuUiAlpha: 1,
     oceanOverlayAlpha: 0,

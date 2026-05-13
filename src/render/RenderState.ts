@@ -151,6 +151,7 @@ export interface RenderState {
 
   // Boat phase UI
   upgradePanelOpen: keyof UpgradeState | null;
+  boatLeaderboardOpen: boolean;
   upgrades: UpgradeState;
   upgradeCosts: Record<keyof UpgradeState, number>;
   canAfford: Record<keyof UpgradeState, boolean>;

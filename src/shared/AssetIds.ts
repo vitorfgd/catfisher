@@ -45,6 +45,10 @@ export const AssetIds = {
   iconMusicOn: 'iconMusicOn',
   /** In-game music mute toggle (note + strike). */
   iconMusicOff: 'iconMusicOff',
+  /** Boat menu: opens leaderboard modal. */
+  uiLeaderboard: 'uiLeaderboard',
+  /** Breach end overlay: diver splash above run summary. */
+  endscreenSplashArt: 'endscreenSplashArt',
   /** FTUE: finger pointing at fish to tap (points right) */
   ftueHand: 'ftueHand',
 

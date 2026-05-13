@@ -14,11 +14,12 @@ import {
 export type { GameEvent } from './Types';
 
 import type { GameInputCommand } from '../shared/InputCommands';
+import { LEADERBOARD_PLACEHOLDER_NPCS } from '../shared/leaderboardPlaceholders';
 import type { RenderState } from '../render/RenderState';
 
 import {
   buildDiveTransitionDraw,
-  isBreachLeaderboardListening,
+  isBreachingAwaitingConfirm,
   playGameToMenuTransition,
   playMenuToGameTransition,
   updateDiveTransition,
@@ -248,16 +249,16 @@ function createFtueRuntimeState(): FullGameState['ftue'] {
 }
 
 function createFakeLeaderboardEntries(bestFishCaught = 0): LeaderboardEntry[] {
-  const base = [
-    { rank: 1, name: 'Mara', fishCaught: 42 },
-    { rank: 2, name: 'Skiff', fishCaught: 35 },
-    { rank: 3, name: 'Vitor', fishCaught: Math.max(bestFishCaught, 28), isPlayer: true },
-    { rank: 4, name: 'Pip', fishCaught: 22 },
-    { rank: 5, name: 'Nori', fishCaught: 18 },
-  ];
-  return base
+  const player: LeaderboardEntry = {
+    rank: 0,
+    name: 'YOU',
+    fishCaught: bestFishCaught,
+    isPlayer: true,
+  };
+  return [...LEADERBOARD_PLACEHOLDER_NPCS, player]
     .sort((a, b) => b.fishCaught - a.fishCaught)
-    .map((entry, index) => ({ ...entry, rank: index + 1 }));
+    .map((entry, index) => ({ ...entry, rank: index + 1 }))
+    .slice(0, 10);
 }
 
 function triggerTutorialHint(state: FullGameState, id: TutorialHintId): void {
@@ -647,6 +648,7 @@ export function createInitialState(): FullGameState {
     comboTimer: 0,
     oxyBoostTimer: 0,
     upgradePanelOpen: null,
+    boatLeaderboardOpen: false,
     treasureSpawnTimer: TREASURE_SPAWN_INTERVAL,
     bossSpawnTimer: BOSS_SPAWN_FIRST_DELAY,
     lastRunEarnings: 0,
@@ -735,18 +737,18 @@ function resetForNewDive(state: FullGameState): void {
   state.harpoonGunAnimElapsed = -1;
   state.breachLeaderboardDismissed = false;
   state.breachLeaderboardFadeElapsed = 0;
+  state.boatLeaderboardOpen = false;
 }
 
 function beginBreaching(state: FullGameState): void {
   clearNetVfxApplyingIfNeeded(state, getGameRng());
   state.roundTimeLeft = 0;
-  state.breachLeaderboardDismissed = false;
-  state.breachLeaderboardFadeElapsed = 0;
   playGameToMenuTransition(state);
 }
 
 function finalizeRunToBoat(state: FullGameState): void {
   clearNetVfxApplyingIfNeeded(state, getGameRng());
+  state.boatLeaderboardOpen = false;
   state.diveJumpSfxPlayed = false;
   state.diveSplashEmitted = false;
   state.diveTimer = 0;
@@ -784,6 +786,7 @@ function finalizeRunToBoat(state: FullGameState): void {
   if (state.ftue.stage === 'treasureUpgrade') {
     state.ftue.prompt = 'upgradeHarpoon';
     state.upgradePanelOpen = null;
+    state.boatLeaderboardOpen = false;
     state.upgradeBackHighlightTimer = 2.4;
   } else if (state.lastRunCatchCount > 0) {
     triggerTutorialHint(state, 'upgrades');
@@ -792,8 +795,19 @@ function finalizeRunToBoat(state: FullGameState): void {
 
 function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
   for (const command of commands) {
+    if (command.type === 'openBoatLeaderboard') {
+      state.upgradePanelOpen = null;
+      state.boatLeaderboardOpen = true;
+      continue;
+    }
+    if (command.type === 'closeBoatLeaderboard') {
+      state.boatLeaderboardOpen = false;
+      continue;
+    }
+
     if (command.type === 'divePress') {
       state.upgradePanelOpen = null;
+      state.boatLeaderboardOpen = false;
       resetForNewDive(state);
       if (state.ftue.stage === 'secondDiveConsumables') {
         if (!state.ftue.freeConsumablesGranted) {
@@ -893,11 +907,12 @@ function updateDiving(state: FullGameState, dt: number): void {
 }
 
 function updateBreaching(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
-  if (
-    isBreachLeaderboardListening(state)
-    && commands.some((command) => command.type === 'tap')
-  ) {
-    state.breachLeaderboardDismissed = true;
+  for (const command of commands) {
+    if (command.type === 'confirmBreachToBoat' && isBreachingAwaitingConfirm(state)) {
+      state.breachLeaderboardDismissed = true;
+      state.breachLeaderboardFadeElapsed = 0;
+      break;
+    }
   }
   updateDiveTransition(state, dt);
   if (state.breachTimer >= OCEAN_BREACH_TOTAL_SEC) {
@@ -1971,6 +1986,7 @@ export function getRenderState(state: FullGameState): RenderState {
         ...TUTORIAL_HINT_COPY[state.tutorial.activeId],
       },
     upgradePanelOpen: state.upgradePanelOpen,
+    boatLeaderboardOpen: state.boatLeaderboardOpen,
     upgrades: { ...state.upgrades },
     upgradeCosts: getAllUpgradeCosts(state.upgrades),
     canAfford: getCanAffordAll(state.money, state.upgrades),

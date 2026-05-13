@@ -36,7 +36,9 @@ import { DIVE_TRANSITION } from '../core/diveTransitionConfig';
 import { AssetIds } from '../shared/AssetIds';
 import { FTUE_HAND_MAX_SPAN_BOAT_PX, getFtueHandDrawSize } from '../shared/FtueHandLayout';
 import { getBoatContentColumn, getBoatStatsColumnLayout } from '../shared/BoatUiLayout';
+import { getBoatLeaderboardFabLayout } from '../shared/LeaderboardOverlayLayout';
 import { getUpgradeButtonRect, UPGRADE_KEYS } from '../shared/UiLayout';
+import { drawLeaderboardBoatModal } from './leaderboardModal';
 import { Boat, C, t, tb } from './theme';
 import {
   CONSUMABLE_NAMES,
@@ -46,6 +48,31 @@ import {
   UPGRADE_LEVEL_SPRITES,
   UPGRADE_SUBTEXT,
 } from './upgradePresentation';
+
+function drawBoatLeaderboardFab(renderer: GameRenderer): void {
+  const { cx, cy, d } = getBoatLeaderboardFabLayout();
+  const x = cx - d / 2;
+  const y = cy - d / 2;
+  const corner = d * 0.5;
+  renderer.drawRoundRect(Boat.diveShadow, x, y + 3, d, d, corner);
+  renderer.drawRoundRectAlpha(Boat.diveHi, 0.1, x - 2, y - 2, d + 4, d + 4, corner + 2);
+  renderer.drawRoundRect(Boat.dive, x, y, d, d, corner);
+  const flatW = d - 18;
+  if (flatW > 0) {
+    renderer.drawRect(Boat.diveTopBevel, cx - flatW / 2, y + 2, flatW, 1);
+  }
+  const iconSz = Math.round(d * 0.52 * 1.2);
+  const iconX = Math.round(cx - iconSz / 2);
+  const iconY = Math.round(cy - iconSz / 2);
+  renderer.drawImageTinted(
+    { id: AssetIds.uiLeaderboard },
+    iconX,
+    iconY,
+    iconSz,
+    iconSz,
+    Boat.card,
+  );
+}
 
 const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {
   net: AssetIds.iconNet,
@@ -401,6 +428,10 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     renderer.drawText('Tap GO FISH to start', ldX + padX, STATS_Y + 60, ldTextW, 20, t(14, Boat.labelMuted, 'left', '600'));
   }
 
+  if (state.phase === GamePhase.Boat && !state.boatLeaderboardOpen) {
+    drawBoatLeaderboardFab(renderer);
+  }
+
   const diveCardPadY = sectionPadY + 4;
   const maxDiveShadowOffset = 10;
   const diveCardTop = DIVE_BUTTON_Y - diveCardPadY;
@@ -499,6 +530,9 @@ export function drawBoatMenuUi(renderer: GameRenderer, state: RenderState): void
     CONSUMABLE_H,
   );
 
+  if (state.boatLeaderboardOpen) {
+    drawLeaderboardBoatModal(renderer, state);
+  }
 }
 
 export function drawBoatScreen(renderer: GameRenderer, state: RenderState): void {

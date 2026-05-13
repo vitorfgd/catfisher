@@ -4,6 +4,7 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
+import { isBreachingAwaitingConfirm } from '../core/diveTransitionController';
 import { markFtueDiveCompleteInStorage, markFtueOxygenLessonSeenInStorage } from './FtueStorage';
 import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
@@ -21,7 +22,7 @@ export class BrowserGameLoop {
   constructor(
     private readonly state: FullGameState,
     private readonly renderer: GameRenderer,
-    private readonly input: InputAdapter & Pick<BrowserInputAdapter, 'setPhase' | 'setBoatUiState'>,
+    private readonly input: InputAdapter & Pick<BrowserInputAdapter, 'setPhase' | 'setBoatUiState' | 'setBreachingAwaitingConfirm'>,
     private readonly audio: AudioAdapter,
     private readonly leaderboard: LeaderboardAdapter,
   ) {
@@ -44,7 +45,8 @@ export class BrowserGameLoop {
     this.lastTime = timeMs;
 
     this.input.setPhase(this.state.phase === GamePhase.Boat);
-    this.input.setBoatUiState(this.state.upgradePanelOpen);
+    this.input.setBoatUiState(this.state.upgradePanelOpen, this.state.boatLeaderboardOpen);
+    this.input.setBreachingAwaitingConfirm(isBreachingAwaitingConfirm(this.state));
 
     const commands = this.input.drainCommands();
     update(this.state, dt, commands);

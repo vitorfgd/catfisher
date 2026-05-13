@@ -263,6 +263,8 @@ export interface FullGameState {
   comboTimer: number;
   oxyBoostTimer: number;       // > 0 while puffer-catch celebration is showing
   upgradePanelOpen: keyof UpgradeState | null;  // which upgrade detail panel is open
+  /** Boat menu: full-screen leaderboard modal (opened from FAB). */
+  boatLeaderboardOpen: boolean;
   treasureSpawnTimer: number;  // countdown to next treasure fish spawn
   /** Rock boss spawn — separate from random fish table */
   bossSpawnTimer: number;

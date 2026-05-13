@@ -14,6 +14,11 @@ import {
   isDiveButton,
   isUpgradePanelBuyButton,
 } from '../shared/UiLayout';
+import {
+  isBoatLeaderboardFabHit,
+  isLeaderboardModalCloseHit,
+} from '../shared/LeaderboardOverlayLayout';
+import { isBreachAndUpgradeButtonHit } from '../shared/BreachEndScreenLayout';
 
 function clientToLogical(
   clientX: number,
@@ -34,6 +39,8 @@ export class BrowserInputAdapter implements InputAdapter {
   private readonly commands: GameInputCommand[] = [];
   private isBoatPhase = true;
   private upgradePanelOpen: keyof UpgradeState | null = null;
+  private boatLeaderboardOpen = false;
+  private breachAwaitingConfirm = false;
 
   constructor(private readonly canvas: HTMLCanvasElement) {
     canvas.addEventListener('pointerdown', this.onPointerDown);
@@ -42,11 +49,21 @@ export class BrowserInputAdapter implements InputAdapter {
 
   setPhase(isBoat: boolean): void {
     this.isBoatPhase = isBoat;
-    if (!isBoat) this.upgradePanelOpen = null;
+    if (!isBoat) {
+      this.upgradePanelOpen = null;
+      this.boatLeaderboardOpen = false;
+    } else {
+      this.breachAwaitingConfirm = false;
+    }
   }
 
-  setBoatUiState(upgradePanelOpen: keyof UpgradeState | null): void {
+  setBoatUiState(upgradePanelOpen: keyof UpgradeState | null, boatLeaderboardOpen: boolean): void {
     this.upgradePanelOpen = upgradePanelOpen;
+    this.boatLeaderboardOpen = boatLeaderboardOpen;
+  }
+
+  setBreachingAwaitingConfirm(active: boolean): void {
+    this.breachAwaitingConfirm = active;
   }
 
   drainCommands(): GameInputCommand[] {
@@ -58,6 +75,13 @@ export class BrowserInputAdapter implements InputAdapter {
     const { x, y } = clientToLogical(event.clientX, event.clientY, this.canvas);
 
     if (this.isBoatPhase) {
+      if (this.boatLeaderboardOpen) {
+        if (isLeaderboardModalCloseHit(x, y)) {
+          this.commands.push({ type: 'closeBoatLeaderboard' });
+        }
+        return;
+      }
+
       if (this.upgradePanelOpen !== null) {
         // Full-screen panel is open — buy button or any other tap closes
         if (isUpgradePanelBuyButton(x, y)) {
@@ -77,6 +101,11 @@ export class BrowserInputAdapter implements InputAdapter {
         return;
       }
 
+      if (isBoatLeaderboardFabHit(x, y)) {
+        this.commands.push({ type: 'openBoatLeaderboard' });
+        return;
+      }
+
       const upgradeId = getUpgradeKeyByPoint(x, y);
       if (upgradeId !== null) {
         this.upgradePanelOpen = upgradeId;
@@ -87,6 +116,13 @@ export class BrowserInputAdapter implements InputAdapter {
       const consumableId = getBoatConsumableBuyHit(x, y);
       if (consumableId !== null) {
         this.commands.push({ type: 'buyConsumable', id: consumableId });
+      }
+      return;
+    }
+
+    if (this.breachAwaitingConfirm) {
+      if (isBreachAndUpgradeButtonHit(x, y)) {
+        this.commands.push({ type: 'confirmBreachToBoat' });
       }
       return;
     }

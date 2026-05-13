@@ -45,6 +45,8 @@ export const BrowserAssetManifest = {
     [AssetIds.gun1]: 'assets/gun_1.png',
     [AssetIds.iconMusicOn]: 'assets/ui-music-on.png',
     [AssetIds.iconMusicOff]: 'assets/ui-music-off.png',
+    [AssetIds.uiLeaderboard]: 'assets/ui-leaderboard.png',
+    [AssetIds.endscreenSplashArt]: 'assets/endscreen-splash-art.png',
   },
   sounds: {
     backgroundMusic: 'assets/background-music.ogg',

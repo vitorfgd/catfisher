@@ -13,8 +13,6 @@ import {
   HARPOON_GUN_DRAW_W,
   HARPOON_GUN_DRAW_H,
   HARPOON_GUN_SLIDE_HIDDEN_PX,
-  DIVE_BUTTON_HEIGHT,
-  DIVE_BUTTON_LABEL_Y_OFFSET,
   getInGameMusicButtonRect,
   IN_GAME_MUSIC_BUTTON_DIAM,
   SHARK_BITE_VFX_APPROACH_SEC,
@@ -24,11 +22,11 @@ import {
 } from '../core/Constants';
 import { AssetIds } from '../shared/AssetIds';
 import {
-  FTUE_HAND_BREACH_SPAN_MULT,
   FTUE_HAND_MAX_SPAN_WORLD_PX,
   getFtueHandDrawSize,
 } from '../shared/FtueHandLayout';
 import { drawBoatMenuUi, drawBoatSceneLayer, drawBoatScreen } from './boatScreen';
+import { drawBreachEndScreenOverlay } from './breachEndScreen';
 import {
   drawDiveBackdropWipe,
   drawDiveMaskedBackdrops,
@@ -911,129 +909,8 @@ function drawSharkBiteTeeth(renderer: GameRenderer, elapsed: number): void {
   renderer.popOpacity();
 }
 
-/** Matches boat GO FISH / row cards corner radius. */
-const BREACH_CONTINUE_BTN_R = 14;
-
-function drawBreachLeaderboardTapCueHand(renderer: GameRenderer, tipX: number, tipY: number): void {
-  const press = ftueClickPressT();
-  const dip = press * FTUE_CLICK_DIP_PX;
-  const { w: hw, h: hh } = getFtueHandDrawSize(
-    FTUE_HAND_MAX_SPAN_WORLD_PX * FTUE_HAND_BREACH_SPAN_MULT,
-  );
-  const tipYy = tipY + dip;
-  const drawL = tipX - FTUE_HAND_TIP_X_FR * hw;
-  const drawT = tipYy - FTUE_HAND_TIP_Y_FR * hh;
-  renderer.pushRotate(28, tipX, tipYy);
-  renderer.drawImage({ id: AssetIds.ftueHand }, drawL, drawT, hw, hh);
-  renderer.pop();
-}
-
-function drawDiveStylePrimaryButton(
-  renderer: GameRenderer,
-  diveX: number,
-  diveY: number,
-  diveW: number,
-  label: string,
-  pressY: number,
-): void {
-  const shadowOffset = Math.max(2, 10 - pressY);
-  renderer.drawRoundRect(
-    Boat.diveShadow,
-    diveX,
-    diveY + shadowOffset,
-    diveW,
-    DIVE_BUTTON_HEIGHT,
-    BREACH_CONTINUE_BTN_R,
-  );
-  renderer.drawRoundRectAlpha(
-    Boat.diveHi,
-    0.11,
-    diveX - 4,
-    diveY + pressY - 4,
-    diveW + 8,
-    DIVE_BUTTON_HEIGHT + 8,
-    16,
-  );
-  renderer.drawRoundRect(
-    Boat.dive,
-    diveX,
-    diveY + pressY,
-    diveW,
-    DIVE_BUTTON_HEIGHT,
-    BREACH_CONTINUE_BTN_R,
-  );
-  const flatW = diveW - 2 * BREACH_CONTINUE_BTN_R;
-  if (flatW > 0) {
-    renderer.drawRect(Boat.diveTopBevel, diveX + BREACH_CONTINUE_BTN_R, diveY + pressY + 1, flatW, 1);
-  }
-  const diveHiH = 18;
-  const diveHiY = diveY + pressY + (DIVE_BUTTON_HEIGHT - diveHiH) / 2;
-  renderer.drawRoundRectAlpha(Boat.diveHi, 0.22, diveX + 3, diveHiY, diveW - 6, diveHiH, 10);
-  renderer.drawText(label, diveX, diveY + pressY + DIVE_BUTTON_LABEL_Y_OFFSET, diveW, DIVE_BUTTON_HEIGHT, {
-    ...t(26, Boat.card, 'center', '800'),
-    useLayoutMaxWidth: false,
-  });
-}
-
-function drawBreachLeaderboardOverlay(renderer: GameRenderer, state: RenderState, alpha: number): void {
-  if (alpha <= 0.004) return;
-
-  const BREACH_LOGO_TOP_FRAC = 0.1;
-  const BREACH_CARD_TOP_FRAC = 0.415;
-  /** Matches horizontal inset `(CANVAS_WIDTH - w) / 2` for the leaderboard card. */
-  const BREACH_CARD_SIDE_MARGIN = 36;
-
-  const w = CANVAS_WIDTH - 72;
-  const h = 490;
-  const x = (CANVAS_WIDTH - w) / 2;
-  const y = Math.round(CANVAS_HEIGHT * BREACH_CARD_TOP_FRAC);
-  renderer.pushOpacity(alpha);
-  renderer.drawRectAlpha(C.bg, 0.52, 0, 0, CANVAS_WIDTH, CANVAS_HEIGHT);
-
-  const logoW = Math.min(390, CANVAS_WIDTH - 34);
-  const logoH = logoW / 1.58;
-  const logoTop = CANVAS_HEIGHT * BREACH_LOGO_TOP_FRAC;
-  renderer.drawImage({ id: AssetIds.gameLogo }, (CANVAS_WIDTH - logoW) / 2, logoTop, logoW, logoH);
-
-  renderer.drawRoundRectAlpha(Boat.card, 0.96, x, y, w, h, 22);
-  renderer.drawRoundRectAlpha(C.teal, 0.12, x + 4, y + 4, w - 8, h - 8, 18);
-
-  renderer.drawText('DIVE COMPLETE', x, y + 26, w, 30, t(17, C.muted, 'center', '800'));
-  renderer.drawText(`${state.sessionCatchCount} FISH CAUGHT`, x, y + 62, w, 44, tb(31, C.gold, 'center'));
-  renderer.drawText(`+$${state.sessionEarnings}`, x, y + 112, w, 32, tb(23, C.white, 'center'));
-
-  const listY = y + 180;
-  renderer.drawText('LEADERBOARD', x + 24, listY - 34, w - 48, 24, t(17, C.teal, 'left', '800'));
-  const rows = state.leaderboard.entries
-    .map((entry) => entry.isPlayer
-      ? { ...entry, fishCaught: Math.max(entry.fishCaught, state.sessionCatchCount) }
-      : entry)
-    .sort((a, b) => b.fishCaught - a.fishCaught)
-    .map((entry, index) => ({ ...entry, rank: index + 1 }))
-    .slice(0, 5);
-  for (let i = 0; i < rows.length; i += 1) {
-    const entry = rows[i]!;
-    const rowY = listY + i * 42;
-    const isPlayer = entry.isPlayer;
-    renderer.drawRoundRectAlpha(isPlayer ? C.gold : C.border, isPlayer ? 0.18 : 0.22, x + 22, rowY, w - 44, 34, 11);
-    renderer.drawText(`#${entry.rank}`, x + 36, rowY + 4, 48, 26, tb(16, isPlayer ? C.gold : C.muted, 'left'));
-    renderer.drawText(entry.name, x + 92, rowY + 4, 170, 26, t(17, C.white, 'left', '800'));
-    renderer.drawText(`${entry.fishCaught}`, x + w - 94, rowY + 4, 58, 26, tb(18, isPlayer ? C.gold : C.white, 'right'));
-  }
-
-  const btnW = w - BREACH_CARD_SIDE_MARGIN * 2;
-  const btnX = x + BREACH_CARD_SIDE_MARGIN;
-  const btnY = y + h - DIVE_BUTTON_HEIGHT - BREACH_CARD_SIDE_MARGIN;
-  const loopPressed = Math.floor(Date.now() / 520) % 2 === 0;
-  const pressY = loopPressed ? 5 : 0;
-  drawDiveStylePrimaryButton(renderer, btnX, btnY, btnW, 'CONTINUE', pressY);
-  drawBreachLeaderboardTapCueHand(
-    renderer,
-    btnX + btnW * 0.125,
-    btnY + pressY + DIVE_BUTTON_HEIGHT * 0.5,
-  );
-
-  renderer.popOpacity();
+function drawBreachPlaceholderOverlay(renderer: GameRenderer, state: RenderState, alpha: number): void {
+  drawBreachEndScreenOverlay(renderer, state, alpha);
 }
 
 function drawInGameMusicMuteButton(renderer: GameRenderer, state: RenderState): void {
@@ -1156,10 +1033,12 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
     // The wipe backdrop must not be tied to HUD opacity; once the waterline moves,
     // the boat background should already be visible beneath it.
     drawDiveBackdropWipe(renderer, state.diveTransition);
-    drawBreachLeaderboardOverlay(renderer, state, state.diveTransition.breachLeaderboardAlpha);
     if (state.diveTransition.breachBoatRevealAlpha > 0.002) {
       drawBreachingBoatScreen(renderer, state);
     }
     drawDiveWaterlineVfx(renderer, state.diveTransition);
+    // End-screen (stats + CTA) must draw above waterline/bubbles so it stays readable while the
+    // transition is paused waiting for BREACH & UPGRADE.
+    drawBreachPlaceholderOverlay(renderer, state, state.diveTransition.breachLeaderboardAlpha);
   }
 }

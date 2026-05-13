@@ -1,6 +1,7 @@
 // Platform-agnostic leaderboard contract with a browser fake implementation.
 
 import type { LeaderboardEntry, LeaderboardState } from '../core/Types';
+import { LEADERBOARD_PLACEHOLDER_NPCS } from '../shared/leaderboardPlaceholders';
 
 export interface LeaderboardAdapter {
   getFishCaughtLeaderboard(): LeaderboardState;
@@ -8,13 +9,6 @@ export interface LeaderboardAdapter {
 }
 
 const LEADERBOARD_KEY = 'grumpiest_catch_fish_caught_leaderboard_v1';
-
-const FAKE_ENTRIES: LeaderboardEntry[] = [
-  { rank: 1, name: 'Mara', fishCaught: 42 },
-  { rank: 2, name: 'Skiff', fishCaught: 35 },
-  { rank: 3, name: 'Pip', fishCaught: 22 },
-  { rank: 4, name: 'Nori', fishCaught: 18 },
-];
 
 function ranked(entries: LeaderboardEntry[]): LeaderboardEntry[] {
   return entries
@@ -64,7 +58,7 @@ export class BrowserFakeLeaderboardAdapter implements LeaderboardAdapter {
       fishCaught: bestFishCaught,
       isPlayer: true,
     };
-    return ranked([...FAKE_ENTRIES, player]).slice(0, 5);
+    return ranked([...LEADERBOARD_PLACEHOLDER_NPCS, player]).slice(0, 10);
   }
 
   private readBest(): number {
