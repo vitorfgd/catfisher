@@ -58,7 +58,7 @@ export const BrowserAssetManifest = {
   },
   sounds: {
     backgroundMusic: 'assets/background-music.ogg',
-    boatMenuAmbient: 'assets/boat-menu-ambient.ogg',
+    boatMenuAmbient: 'assets/sea-looping.ogg',
     /** Menu→game: one-shot ~1s after the diver leaves the deck (`diverJumped`). */
     diverEntryPerc: 'assets/dive-entry-perc.wav',
     /** Dive ↑ / breach ↓ waterline strip when churn bubbles spawn (`transitionWaterlineBubbles`). */
