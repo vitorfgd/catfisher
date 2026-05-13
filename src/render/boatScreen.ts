@@ -13,6 +13,19 @@ import {
   CANVAS_HEIGHT,
   CANVAS_WIDTH,
   getBoatBackgroundDrawRect,
+  getBoatSpriteDrawRect,
+  BOAT_SCENE_SKY_NATURAL_H,
+  BOAT_SCENE_SKY_NATURAL_W,
+  BOAT_SCENE_SURFACE_1_DRAW_H,
+  BOAT_SCENE_SURFACE_1_TOP_Y,
+  BOAT_SCENE_SURFACE_2_DRAW_H,
+  BOAT_SCENE_SURFACE_2_TOP_Y,
+  BOAT_SCENE_SURFACE_3_DRAW_H,
+  BOAT_SCENE_SURFACE_3_TOP_Y,
+  BOAT_SCENE_SURFACE_4_DRAW_H,
+  BOAT_SCENE_SURFACE_4_TOP_Y,
+  BOAT_SCENE_SURFACE_5_DRAW_H,
+  BOAT_SCENE_SURFACE_DRAW_W,
   CONSUMABLE_GAP,
   CONSUMABLE_H,
   CONSUMABLE_W,
@@ -78,6 +91,8 @@ const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {
   net: AssetIds.iconNet,
   bait: AssetIds.iconBait,
 };
+
+const BOAT_STANDING_DIVER_RENDER_OFFSET_Y = 20;
 
 /** Matches upgrade / gear row `drawRoundRect` radius — highlight spans the flat top span between corners. */
 const ROW_CARD_CORNER_R = 14;
@@ -313,13 +328,60 @@ function drawSectionHeader(
   renderer.drawText(label, x + 12, y + 4, w - 12, H - 14, t(30, accent, 'left', '800'));
 }
 
-export function drawBoatBackgroundLayer(renderer: GameRenderer, alpha = 1): void {
-  const { x, y, w, h } = getBoatBackgroundDrawRect();
-  if (alpha >= 0.999) {
-    renderer.drawImage({ id: AssetIds.boatBg }, x, y, w, h);
-  } else if (alpha > 0.002) {
-    renderer.drawImageAlpha({ id: AssetIds.boatBg }, x, y, w, h, alpha);
+function easedLoopOffset(amplitude: number, durationSec: number, phaseRad: number): number {
+  return Math.sin((Date.now() / 1000 / durationSec) * Math.PI * 2 + phaseRad) * amplitude;
+}
+
+function drawSurfaceLayer(
+  renderer: GameRenderer,
+  assetId: string,
+  topY: number,
+  height: number,
+  amplitude: number,
+  durationSec: number,
+  phaseRad: number,
+): void {
+  const x = CANVAS_WIDTH / 2 + easedLoopOffset(amplitude, durationSec, phaseRad) - BOAT_SCENE_SURFACE_DRAW_W / 2;
+  renderer.drawImage({ id: assetId }, x, topY, BOAT_SCENE_SURFACE_DRAW_W, height);
+}
+
+function getBoatRockDegrees(): number {
+  return Math.sin((Date.now() / 1000 / 5.6) * Math.PI * 2 + 0.45) * 6;
+}
+
+function drawBoatSpriteGroup(renderer: GameRenderer, includeStandingDiver: boolean): void {
+  const r = getBoatSpriteDrawRect();
+  renderer.pushRotate(getBoatRockDegrees(), r.x + r.w / 2, r.y + r.h / 2);
+  renderer.drawImage({ id: AssetIds.boatSceneBoat }, r.x, r.y, r.w, r.h);
+  if (includeStandingDiver) {
+    const diver = getBoatStandingDiverRect();
+    renderer.drawImage({ id: AssetIds.diverStand }, diver.x, diver.y, diver.w, diver.h);
   }
+  renderer.pop();
+}
+
+export function drawBoatBackgroundLayer(renderer: GameRenderer, alpha = 1, includeStandingDiver = false): void {
+  if (alpha <= 0.002) return;
+  if (alpha < 0.999) renderer.pushOpacity(alpha);
+
+  const skyH = (CANVAS_WIDTH * BOAT_SCENE_SKY_NATURAL_H) / BOAT_SCENE_SKY_NATURAL_W;
+  renderer.drawImage({ id: AssetIds.boatSceneSky }, 0, 0, CANVAS_WIDTH, skyH);
+  drawSurfaceLayer(renderer, AssetIds.boatSceneSurface1, BOAT_SCENE_SURFACE_1_TOP_Y, BOAT_SCENE_SURFACE_1_DRAW_H, 300, 14.5, 0.35);
+  drawSurfaceLayer(renderer, AssetIds.boatSceneSurface2, BOAT_SCENE_SURFACE_2_TOP_Y, BOAT_SCENE_SURFACE_2_DRAW_H, 450, 18.5, Math.PI + 0.9);
+  drawBoatSpriteGroup(renderer, includeStandingDiver);
+  drawSurfaceLayer(renderer, AssetIds.boatSceneSurface3, BOAT_SCENE_SURFACE_3_TOP_Y, BOAT_SCENE_SURFACE_3_DRAW_H, 390, 16.8, 2.35);
+  drawSurfaceLayer(renderer, AssetIds.boatSceneSurface4, BOAT_SCENE_SURFACE_4_TOP_Y, BOAT_SCENE_SURFACE_4_DRAW_H, 340, 20.2, Math.PI * 1.45);
+  drawSurfaceLayer(
+    renderer,
+    AssetIds.boatSceneSurface5,
+    CANVAS_HEIGHT - BOAT_SCENE_SURFACE_5_DRAW_H,
+    BOAT_SCENE_SURFACE_5_DRAW_H,
+    280,
+    23.5,
+    Math.PI * 0.78,
+  );
+
+  if (alpha < 0.999) renderer.popOpacity();
 }
 
 export function drawBoatBackgroundOnly(renderer: GameRenderer): void {
@@ -335,7 +397,7 @@ export function getBoatStandingDiverRect(): { x: number; y: number; w: number; h
   const anchorY = boat.y + D.diverDeckAnchor.yFrac * boat.h;
   return {
     x: anchorX - w * 0.5,
-    y: anchorY - h * D.diverStandFeetPivotY,
+    y: anchorY - h * D.diverStandFeetPivotY + BOAT_STANDING_DIVER_RENDER_OFFSET_Y,
     w,
     h,
   };
@@ -351,8 +413,8 @@ export function drawBoatStandingDiver(renderer: GameRenderer, alpha = 1): void {
 }
 
 export function drawBoatSceneLayer(renderer: GameRenderer, state: RenderState, alpha = 1): void {
-  drawBoatBackgroundLayer(renderer, alpha);
   const d = state.diveTransition?.diver;
+  drawBoatBackgroundLayer(renderer, alpha, d == null);
   if (d != null) {
     const id = d.pose === 'stand' ? AssetIds.diverStand : AssetIds.diverJump;
     if (alpha >= 0.999) {
@@ -360,8 +422,6 @@ export function drawBoatSceneLayer(renderer: GameRenderer, state: RenderState, a
     } else if (alpha > 0.002) {
       renderer.drawImageAlpha({ id }, d.x, d.y, d.drawW, d.drawH, alpha * d.alpha);
     }
-  } else {
-    drawBoatStandingDiver(renderer, alpha);
   }
 }
 

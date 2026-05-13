@@ -10,9 +10,13 @@ import {
   LEADERBOARD_MODAL_CARD_X,
   LEADERBOARD_MODAL_CARD_Y,
 } from '../shared/LeaderboardOverlayLayout';
+import { AssetIds } from '../shared/AssetIds';
 import type { GameRenderer } from './GameRenderer';
 import type { RenderState } from './RenderState';
 import { Boat, C, t, tb } from './theme';
+
+const SPLASH_ART_ASPECT_WH = 790 / 547;
+const SPLASH_ART_H = 160;
 
 export function drawLeaderboardBoatModal(renderer: GameRenderer, state: RenderState): void {
   const w = LEADERBOARD_MODAL_CARD_W;
@@ -24,8 +28,13 @@ export function drawLeaderboardBoatModal(renderer: GameRenderer, state: RenderSt
 
   renderer.drawRoundRectAlpha(Boat.statsCard, Boat.statsAlpha, x, y, w, h, 22);
 
-  const headerTop = y + 16;
-  const headerH = 46;
+  const artW = SPLASH_ART_H * SPLASH_ART_ASPECT_WH;
+  const artX = x + (w - artW) / 2;
+  const artY = y + 16;
+  renderer.drawImage({ id: AssetIds.leaderboardSplashArt }, artX, artY, artW, SPLASH_ART_H);
+
+  const headerTop = artY + SPLASH_ART_H + 8;
+  const headerH = 42;
   renderer.drawText('LEADERBOARD', x, headerTop, w, headerH, t(34, C.teal, 'center', '800'));
 
   const rowPitch = 42;

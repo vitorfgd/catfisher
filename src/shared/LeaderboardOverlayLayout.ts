@@ -2,7 +2,7 @@ import { CANVAS_HEIGHT, CANVAS_WIDTH, getBoatStatsCardTopY } from '../core/Const
 
 /** Matches former breach leaderboard card (`RenderFrame` / `leaderboardModal`). */
 export const LEADERBOARD_MODAL_CARD_W = CANVAS_WIDTH - 72;
-export const LEADERBOARD_MODAL_CARD_H = 490;
+export const LEADERBOARD_MODAL_CARD_H = 650;
 export const LEADERBOARD_MODAL_CARD_X = (CANVAS_WIDTH - LEADERBOARD_MODAL_CARD_W) / 2;
 /** Vertically centered in the full-screen modal (scrim). */
 export const LEADERBOARD_MODAL_CARD_Y = Math.round((CANVAS_HEIGHT - LEADERBOARD_MODAL_CARD_H) / 2);

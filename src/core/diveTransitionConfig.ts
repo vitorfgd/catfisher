@@ -59,7 +59,7 @@ export const DIVE_TRANSITION = {
    * Deck contact point in **boat background UV space** (same zoomed rect as `drawBoatBackgroundLayer`).
    * (0,0) = top-left of scaled boat image; feet are placed at this point via pivots below.
    */
-  diverDeckAnchor: { xFrac: 0.3, yFrac: 0.265 },
+  diverDeckAnchor: { xFrac: 0.238, yFrac: 0.253 },
   diverDrawWidth: 100,
   /** Standing sprite: feet row as fraction of sprite height from top (0–1). */
   diverStandFeetPivotY: 0.88,

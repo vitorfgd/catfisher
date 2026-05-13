@@ -21,6 +21,13 @@ export const AssetIds = {
   fishClown: 'fishClown',
   underwaterBg: 'underwaterBg',
   boatBg: 'boatBg',
+  boatSceneSky: 'boatSceneSky',
+  boatSceneSurface1: 'boatSceneSurface1',
+  boatSceneSurface2: 'boatSceneSurface2',
+  boatSceneBoat: 'boatSceneBoat',
+  boatSceneSurface3: 'boatSceneSurface3',
+  boatSceneSurface4: 'boatSceneSurface4',
+  boatSceneSurface5: 'boatSceneSurface5',
   gameLogo: 'gameLogo',
 
   // Upgrade sprites (level 1-4)
@@ -47,6 +54,8 @@ export const AssetIds = {
   iconMusicOff: 'iconMusicOff',
   /** Boat menu: opens leaderboard modal. */
   uiLeaderboard: 'uiLeaderboard',
+  /** Boat leaderboard modal: podium fish splash above title. */
+  leaderboardSplashArt: 'leaderboardSplashArt',
   /** Breach end overlay: diver splash above run summary. */
   endscreenSplashArt: 'endscreenSplashArt',
   /** FTUE: finger pointing at fish to tap (points right) */

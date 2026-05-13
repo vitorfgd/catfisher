@@ -7,14 +7,39 @@ export const CANVAS_WIDTH = 480;
 export const CANVAS_HEIGHT = Math.round((CANVAS_WIDTH * 20) / 9);
 export const GAME_ASPECT_RATIO = CANVAS_WIDTH / CANVAS_HEIGHT;
 
-/** Matches `drawBoatBackgroundLayer` — diver cinematic anchors use UVs in this rect. */
-export const BOAT_BACKGROUND_ZOOM = 1.18;
-export const BOAT_BACKGROUND_DRAW_Y = -30;
+/** Dynamic boat-scene background layer positions. */
+export const BOAT_SCENE_SKY_NATURAL_W = 600;
+export const BOAT_SCENE_SKY_NATURAL_H = 448;
+export const BOAT_SCENE_SURFACE_1_TOP_Y = 330;
+export const BOAT_SCENE_SURFACE_1_DRAW_H = 96;
+export const BOAT_SCENE_SURFACE_2_TOP_Y = 360;
+export const BOAT_SCENE_SURFACE_2_DRAW_H = 170;
+export const BOAT_SCENE_SURFACE_3_TOP_Y = 420;
+export const BOAT_SCENE_SURFACE_3_DRAW_H = 220;
+export const BOAT_SCENE_SURFACE_4_TOP_Y = 520;
+export const BOAT_SCENE_SURFACE_4_DRAW_H = 300;
+export const BOAT_SCENE_SURFACE_5_DRAW_H = 420;
+export const BOAT_SCENE_SURFACE_DRAW_W = 1500;
+export const BOAT_SCENE_BOAT_DRAW_W = 432;
+export const BOAT_SCENE_BOAT_DRAW_H = 330;
+export const BOAT_SCENE_BOAT_VISUAL_OFFSET_Y = -100;
 
+/** Boat/bear anchor rect; kept stable so diver/bear screen placement does not move with visual sprite tweaks. */
 export function getBoatBackgroundDrawRect(): { x: number; y: number; w: number; h: number } {
-  const w = CANVAS_WIDTH * BOAT_BACKGROUND_ZOOM;
-  const h = CANVAS_HEIGHT * BOAT_BACKGROUND_ZOOM;
-  return { x: (CANVAS_WIDTH - w) / 2, y: BOAT_BACKGROUND_DRAW_Y, w, h };
+  const w = BOAT_SCENE_BOAT_DRAW_W;
+  const h = BOAT_SCENE_BOAT_DRAW_H;
+  return {
+    x: (CANVAS_WIDTH - w) / 2,
+    y: BOAT_SCENE_SURFACE_2_TOP_Y + BOAT_SCENE_SURFACE_2_DRAW_H + 20 - h,
+    w,
+    h,
+  };
+}
+
+/** Visual `boat-sprite` draw rect. */
+export function getBoatSpriteDrawRect(): { x: number; y: number; w: number; h: number } {
+  const r = getBoatBackgroundDrawRect();
+  return { ...r, y: r.y + BOAT_SCENE_BOAT_VISUAL_OFFSET_Y };
 }
 
 /** Bottom bar: round timer + oxygen strip (logical px). */
