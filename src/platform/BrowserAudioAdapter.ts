@@ -12,6 +12,7 @@ const BGM_VOLUME = 0.12;
 const BGM_FADE_OUT_SEC = 1.35;
 const UNDERWATER_AMBIENT_VOLUME = 0.1;
 const UNDERWATER_AMBIENT_FADE_OUT_SEC = 1.2;
+const HARPOON_SHOT_VOLUME = 0.5;
 
 export class BrowserAudioAdapter implements AudioAdapter {
   private ctx: AudioContext | null = null;
@@ -21,6 +22,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
   private readonly waterlineBubbles: HTMLAudioElement | null = null;
   private readonly boatMenuLoop: HTMLAudioElement | null = null;
   private readonly underwaterLoop: HTMLAudioElement | null = null;
+  private readonly harpoonShot: HTMLAudioElement | null = null;
   private boatMenuAmbientWanted = false;
   private underwaterAmbientWanted = false;
   private backgroundMusicStarted = false;
@@ -34,6 +36,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
     diverEntryPercSrc?: string,
     waterlineBubblesSrc?: string,
     underwaterLoopSrc?: string,
+    harpoonShotSrc?: string,
   ) {
     this.backgroundMusic = backgroundMusicSrc != null ? new Audio(backgroundMusicSrc) : null;
     if (this.backgroundMusic != null) {
@@ -68,6 +71,13 @@ export class BrowserAudioAdapter implements AudioAdapter {
       loop.volume = UNDERWATER_AMBIENT_VOLUME;
       loop.preload = 'auto';
       this.underwaterLoop = loop;
+    }
+    if (harpoonShotSrc != null && harpoonShotSrc !== '') {
+      const clip = new Audio(harpoonShotSrc);
+      clip.volume = HARPOON_SHOT_VOLUME;
+      clip.preload = 'auto';
+      clip.load();
+      this.harpoonShot = clip;
     }
 
     const onFirstGesture = (): void => this.unlockAmbientAudio();
@@ -269,6 +279,18 @@ export class BrowserAudioAdapter implements AudioAdapter {
     }
   }
 
+  private playHarpoonShot(): void {
+    if (this.harpoonShot == null) return;
+    try {
+      this.harpoonShot.pause();
+      this.harpoonShot.currentTime = 0;
+      this.harpoonShot.volume = HARPOON_SHOT_VOLUME;
+      void this.harpoonShot.play().catch(() => {});
+    } catch {
+      // Ignore decode / playback failures.
+    }
+  }
+
   handleEvent(event: GameEvent): void {
     this.unlockAmbientAudio();
     switch (event.type) {
@@ -298,6 +320,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
         break;
       }
       case 'spearFired':
+        this.playHarpoonShot();
         break;
       case 'diveStarted':
         this.playTone(220, 0.35, 0.15, 'sine');

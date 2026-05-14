@@ -651,6 +651,20 @@ function harpoonGunSlidePixels(elapsed: number): number {
   return hidden * u;
 }
 
+function diverShotRecoilPixels(elapsed: number): number {
+  if (elapsed < 0) return 0;
+  const maxRecoil = 18;
+  const downSec = 0.07;
+  const totalSec = 0.34;
+  if (elapsed >= totalSec) return 0;
+  if (elapsed <= downSec) {
+    return maxRecoil * netVfxSmoothstep01(elapsed / downSec);
+  }
+  const upT = (elapsed - downSec) / Math.max(1e-6, totalSec - downSec);
+  const easeOut = 1 - (1 - Math.min(1, Math.max(0, upT))) ** 3;
+  return maxRecoil * (1 - easeOut);
+}
+
 /**
  * First-person harpoon: grip at the player anchor (bottom-centre), art extends upward; barrel follows `aimAngle`.
  * `slide` is extra +Y on the grip (larger = more hidden below the frame).
@@ -786,7 +800,7 @@ function drawUnderwaterPlayingField(renderer: GameRenderer, state: RenderState):
   }
   for (const spear of state.spears) drawSpearBody(renderer, spear);
   if (actionZoomed) {
-    drawDiverCharacter(renderer, breachExitOffset);
+    drawDiverCharacter(renderer, breachExitOffset + diverShotRecoilPixels(state.harpoonGunAnimElapsed));
   }
   drawParticles(renderer, state.particles);
   drawFloatingTexts(renderer, state.floatingTexts);

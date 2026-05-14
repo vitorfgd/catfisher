@@ -65,6 +65,8 @@ export const BrowserAssetManifest = {
     waterlineBubbles: 'assets/waterline-bubbles.wav',
     /** Dive / gameplay / breach: looping depth bed (everything except boat menu). */
     underwaterAmbient: 'assets/underwater-ambient.ogg',
+    /** Action: one-shot when the player fires the harpoon. */
+    harpoonShot: 'assets/harpoon-shot.ogg',
   },
 } as const;
 

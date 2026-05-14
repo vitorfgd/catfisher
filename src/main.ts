@@ -90,6 +90,7 @@ async function main(): Promise<void> {
     toPublicAssetUrl(BrowserAssetManifest.sounds.diverEntryPerc),
     toPublicAssetUrl(BrowserAssetManifest.sounds.waterlineBubbles),
     toPublicAssetUrl(BrowserAssetManifest.sounds.underwaterAmbient),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonShot),
   );
   const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();
