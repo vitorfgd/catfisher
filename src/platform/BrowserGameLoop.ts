@@ -4,7 +4,7 @@
 import type { FullGameState } from '../core/Types';
 import { GamePhase } from '../core/Types';
 import { drainEvents, getRenderState, setLeaderboardEntries, update } from '../core/GameLogic';
-import { isBreachingAwaitingConfirm } from '../core/diveTransitionController';
+import { getBreachMoneyChimeLevel01, isBreachingAwaitingConfirm } from '../core/diveTransitionController';
 import { markFtueDiveCompleteInStorage, markFtueOxygenLessonSeenInStorage } from './FtueStorage';
 import { markTutorialHintSeen } from './TutorialStorage';
 import type { GameRenderer } from '../render/GameRenderer';
@@ -64,6 +64,11 @@ export class BrowserGameLoop {
       this.state.phase !== GamePhase.Boat
         && !(this.state.phase === GamePhase.Breaching && this.state.breachLeaderboardDismissed),
     );
+
+    this.audio.syncBreachMoneyChime({
+      active: this.state.phase === GamePhase.Breaching,
+      level01: getBreachMoneyChimeLevel01(this.state),
+    });
 
     for (const event of drainEvents(this.state)) {
       if (event.type === 'ftueDiveExited') {

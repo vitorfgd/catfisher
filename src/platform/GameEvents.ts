@@ -18,4 +18,9 @@ export interface AudioAdapter {
   syncUnderwaterAmbient(active: boolean): void;
   /** Browser: mute/unmute background music (sample loops stay unchanged). */
   syncMusicMuted(muted: boolean): void;
+  /**
+   * Breach end screen: quiet bed while the money line counts up (`level01` 0–1 from core).
+   * MHS port can no-op.
+   */
+  syncBreachMoneyChime(ctx: { active: boolean; level01: number }): void;
 }

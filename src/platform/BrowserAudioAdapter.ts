@@ -12,7 +12,14 @@ const BGM_VOLUME = 0.12;
 const BGM_FADE_OUT_SEC = 1.35;
 const UNDERWATER_AMBIENT_VOLUME = 0.1;
 const UNDERWATER_AMBIENT_FADE_OUT_SEC = 1.2;
-const HARPOON_SHOT_VOLUME = 0.5;
+/** Boat menu sea loop — louder than default HTMLAudio 0.1 so it reads on laptop speakers. */
+const BOAT_MENU_AMBIENT_VOLUME = 0.32;
+const HARPOON_SHOT_VOLUME = 0.1;
+const SHOP_PURCHASE_VOLUME = 0.55;
+const GEAR_PURCHASE_VOLUME = 0.5;
+const BREACH_REVEAL_STEP_VOLUME = 0.22;
+/** Max media volume while breach money line counts (`level01` scales this; keep very low). */
+const BREACH_MONEY_CHIME_PEAK = 0.048;
 
 export class BrowserAudioAdapter implements AudioAdapter {
   private ctx: AudioContext | null = null;
@@ -23,6 +30,12 @@ export class BrowserAudioAdapter implements AudioAdapter {
   private readonly boatMenuLoop: HTMLAudioElement | null = null;
   private readonly underwaterLoop: HTMLAudioElement | null = null;
   private readonly harpoonShot: HTMLAudioElement | null = null;
+  private readonly shopPurchase: HTMLAudioElement | null = null;
+  private readonly gearPurchase: HTMLAudioElement | null = null;
+  private readonly breachRevealStepVoices: HTMLAudioElement[] = [];
+  private breachRevealStepVoiceIx = 0;
+  private breachMoneyChime: HTMLAudioElement | null = null;
+  private breachMoneyChimeAudible = false;
   private boatMenuAmbientWanted = false;
   private underwaterAmbientWanted = false;
   private backgroundMusicStarted = false;
@@ -37,6 +50,10 @@ export class BrowserAudioAdapter implements AudioAdapter {
     waterlineBubblesSrc?: string,
     underwaterLoopSrc?: string,
     harpoonShotSrc?: string,
+    shopPurchaseSrc?: string,
+    gearPurchaseSrc?: string,
+    breachRevealStepSrc?: string,
+    breachMoneyChimeSrc?: string,
   ) {
     this.backgroundMusic = backgroundMusicSrc != null ? new Audio(backgroundMusicSrc) : null;
     if (this.backgroundMusic != null) {
@@ -47,7 +64,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
     if (boatMenuLoopSrc != null && boatMenuLoopSrc !== '') {
       const loop = new Audio(boatMenuLoopSrc);
       loop.loop = true;
-      loop.volume = 0.1;
+      loop.volume = BOAT_MENU_AMBIENT_VOLUME;
       loop.preload = 'auto';
       this.boatMenuLoop = loop;
     }
@@ -78,6 +95,37 @@ export class BrowserAudioAdapter implements AudioAdapter {
       clip.preload = 'auto';
       clip.load();
       this.harpoonShot = clip;
+    }
+    if (shopPurchaseSrc != null && shopPurchaseSrc !== '') {
+      const clip = new Audio(shopPurchaseSrc);
+      clip.volume = SHOP_PURCHASE_VOLUME;
+      clip.preload = 'auto';
+      clip.load();
+      this.shopPurchase = clip;
+    }
+    if (gearPurchaseSrc != null && gearPurchaseSrc !== '') {
+      const clip = new Audio(gearPurchaseSrc);
+      clip.volume = GEAR_PURCHASE_VOLUME;
+      clip.preload = 'auto';
+      clip.load();
+      this.gearPurchase = clip;
+    }
+    if (breachRevealStepSrc != null && breachRevealStepSrc !== '') {
+      for (let v = 0; v < 4; v += 1) {
+        const clip = new Audio(breachRevealStepSrc);
+        clip.volume = BREACH_REVEAL_STEP_VOLUME;
+        clip.preload = 'auto';
+        clip.load();
+        this.breachRevealStepVoices.push(clip);
+      }
+    }
+    if (breachMoneyChimeSrc != null && breachMoneyChimeSrc !== '') {
+      const clip = new Audio(breachMoneyChimeSrc);
+      clip.loop = true;
+      clip.volume = 0;
+      clip.preload = 'auto';
+      clip.load();
+      this.breachMoneyChime = clip;
     }
 
     const onFirstGesture = (): void => this.unlockAmbientAudio();
@@ -202,6 +250,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
     this.boatMenuAmbientWanted = active;
     if (this.boatMenuLoop == null) return;
     if (active) {
+      this.boatMenuLoop.volume = BOAT_MENU_AMBIENT_VOLUME;
       if (this.boatMenuLoop.paused) {
         void this.boatMenuLoop.play().catch(() => {});
       }
@@ -229,6 +278,37 @@ export class BrowserAudioAdapter implements AudioAdapter {
     this.musicMuted = muted;
     if (this.backgroundMusic != null && this.backgroundMusicWanted && this.backgroundMusicFadeFrame == null) {
       this.backgroundMusic.volume = muted ? 0 : BGM_VOLUME;
+    }
+  }
+
+  syncBreachMoneyChime(ctx: { active: boolean; level01: number }): void {
+    const clip = this.breachMoneyChime;
+    if (clip == null) return;
+
+    const level = ctx.active ? Math.min(1, Math.max(0, ctx.level01)) : 0;
+    if (level < 0.012) {
+      try {
+        if (!clip.paused) clip.pause();
+        clip.currentTime = 0;
+        clip.volume = 0;
+      } catch {
+        // Ignore.
+      }
+      this.breachMoneyChimeAudible = false;
+      return;
+    }
+
+    this.unlockAmbientAudio();
+    try {
+      if (!this.breachMoneyChimeAudible) {
+        clip.currentTime = 0;
+        this.breachMoneyChimeAudible = true;
+      }
+      clip.volume = level * BREACH_MONEY_CHIME_PEAK;
+      clip.loop = true;
+      if (clip.paused) void clip.play().catch(() => {});
+    } catch {
+      // Ignore decode / playback failures.
     }
   }
 
@@ -291,6 +371,44 @@ export class BrowserAudioAdapter implements AudioAdapter {
     }
   }
 
+  private playShopPurchase(): void {
+    if (this.shopPurchase == null) return;
+    try {
+      this.shopPurchase.pause();
+      this.shopPurchase.currentTime = 0;
+      this.shopPurchase.volume = SHOP_PURCHASE_VOLUME;
+      void this.shopPurchase.play().catch(() => {});
+    } catch {
+      // Ignore decode / playback failures.
+    }
+  }
+
+  private playGearPurchase(): void {
+    if (this.gearPurchase == null) return;
+    try {
+      this.gearPurchase.pause();
+      this.gearPurchase.currentTime = 0;
+      this.gearPurchase.volume = GEAR_PURCHASE_VOLUME;
+      void this.gearPurchase.play().catch(() => {});
+    } catch {
+      // Ignore decode / playback failures.
+    }
+  }
+
+  private playBreachRevealStep(): void {
+    if (this.breachRevealStepVoices.length === 0) return;
+    const clip = this.breachRevealStepVoices[this.breachRevealStepVoiceIx % this.breachRevealStepVoices.length];
+    this.breachRevealStepVoiceIx += 1;
+    try {
+      clip.pause();
+      clip.currentTime = 0;
+      clip.volume = BREACH_REVEAL_STEP_VOLUME;
+      void clip.play().catch(() => {});
+    } catch {
+      // Ignore decode / playback failures.
+    }
+  }
+
   handleEvent(event: GameEvent): void {
     this.unlockAmbientAudio();
     switch (event.type) {
@@ -323,6 +441,8 @@ export class BrowserAudioAdapter implements AudioAdapter {
         this.playHarpoonShot();
         break;
       case 'diveStarted':
+      case 'breachBackToBoat':
+      case 'boatLeaderboardOpened':
         this.playTone(220, 0.35, 0.15, 'sine');
         break;
       case 'diverSplash':
@@ -340,7 +460,13 @@ export class BrowserAudioAdapter implements AudioAdapter {
         setTimeout(() => this.playTone(400, 0.18, 0.16, 'triangle'), 160);
         break;
       case 'upgradeBought':
-        this.playTone(680, 0.14, 0.18, 'triangle');
+        this.playShopPurchase();
+        break;
+      case 'gearPurchased':
+        this.playGearPurchase();
+        break;
+      case 'breachRevealStep':
+        this.playBreachRevealStep();
         break;
       case 'ftueDiveExited':
       case 'ftueOxygenLessonShown':

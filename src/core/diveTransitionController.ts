@@ -30,6 +30,7 @@ import {
   GO_FISH_SPLASH_DELAY_MS,
   getMenuToGameDiveSegmentEnds,
 } from './diveTransitionConfig';
+import { getBreachRevealSchedule, getBreachRevealSfxStepThresholdsSec } from '../shared/BreachEndRevealTiming';
 
 const GO_FISH_SPLASH_DELAY_SEC = GO_FISH_SPLASH_DELAY_MS / 1000;
 import { getGameRng } from './GameRng';
@@ -93,6 +94,31 @@ function breachSegmentEnds(): {
   return { introEnd, playerExitStart, escapeEnd, leaderboardStart, fadeEnd, moveEnd, total };
 }
 
+/** Fade in at start of money count; `outro` is full length of post-count fade-out tail. */
+const BREACH_MONEY_CHIME_FADE_IN_SEC = 0.08;
+const BREACH_MONEY_CHIME_OUTRO_SEC = 0.52;
+
+/** 0–1 driver for quiet looping money chime during breach money text animation. */
+export function getBreachMoneyChimeLevel01(state: FullGameState): number {
+  if (state.phase !== GamePhase.Breaching) return 0;
+  if (state.breachSummaryAnimationsSkipped) return 0;
+  const seg = breachSegmentEnds();
+  if (state.breachTimer < seg.leaderboardStart) return 0;
+  const rel = state.breachSummaryRevealElapsed;
+  const sch = getBreachRevealSchedule(
+    state.sessionCatchCount,
+    state.sessionTime,
+    state.sessionEarnings,
+  );
+  const t0 = sch.moneyCountStart;
+  const tCountEnd = sch.moneyCountStart + sch.moneyCountDur;
+  const tAudioEnd = tCountEnd + BREACH_MONEY_CHIME_OUTRO_SEC;
+  if (rel <= t0 || rel >= tAudioEnd) return 0;
+  const fadeIn = smooth01(Math.min(1, (rel - t0) / Math.max(1e-6, BREACH_MONEY_CHIME_FADE_IN_SEC)));
+  const fadeOut = smooth01(Math.min(1, (tAudioEnd - rel) / Math.max(1e-6, BREACH_MONEY_CHIME_OUTRO_SEC)));
+  return fadeIn * fadeOut;
+}
+
 export function isBreachLeaderboardListening(_state: FullGameState): boolean {
   return false;
 }
@@ -101,13 +127,23 @@ export function isBreachLeaderboardVisible(_state: FullGameState): boolean {
   return false;
 }
 
-function spawnBubbleCluster(state: FullGameState, surfaceDrawH: number): void {
+function spawnBubbleCluster(
+  state: FullGameState,
+  surfaceDrawH: number,
+  band: 'default' | 'breachSummaryBottom' = 'default',
+): void {
   const rng = getGameRng();
   const n = 2 + Math.floor(rng.next() * 4);
+  const yEnd = band === 'breachSummaryBottom' ? diveParentYEndpoints().yEnd : 0;
   for (let i = 0; i < n; i += 1) {
+    const lx = rng.between(24, CANVAS_WIDTH - 24);
+    const ly =
+      band === 'breachSummaryBottom'
+        ? rng.between(CANVAS_HEIGHT * 0.8 - yEnd, CANVAS_HEIGHT + 28 - yEnd)
+        : rng.between(surfaceDrawH + 36, Math.min(CANVAS_HEIGHT * 0.96, CANVAS_HEIGHT - 40));
     state.oceanBubbles.push({
-      lx: rng.between(24, CANVAS_WIDTH - 24),
-      ly: rng.between(surfaceDrawH + 36, Math.min(CANVAS_HEIGHT * 0.96, CANVAS_HEIGHT - 40)),
+      lx,
+      ly,
       variant: Math.floor(rng.next() * 7),
       age: 0,
       vx: rng.between(-22, 22),
@@ -144,6 +180,8 @@ export function playGameToMenuTransition(state: FullGameState): void {
   state.harpoonGunAnimElapsed = -1;
   state.breachLeaderboardDismissed = false;
   state.breachLeaderboardFadeElapsed = 0;
+  state.breachSummaryRevealElapsed = 0;
+  state.breachSummaryAnimationsSkipped = false;
 }
 
 export function updateDiveTransition(state: FullGameState, dt: number): void {
@@ -209,6 +247,25 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
   }
   const t = state.breachTimer;
 
+  const prevReveal = state.breachSummaryRevealElapsed;
+  if (t >= seg.leaderboardStart) {
+    state.breachSummaryRevealElapsed += dt;
+  }
+  const reveal = state.breachSummaryRevealElapsed;
+
+  if (t >= seg.leaderboardStart && !state.breachSummaryAnimationsSkipped) {
+    const steps = getBreachRevealSfxStepThresholdsSec(
+      state.sessionCatchCount,
+      state.sessionTime,
+      state.sessionEarnings,
+    );
+    for (const stepT of steps) {
+      if (prevReveal < stepT && reveal >= stepT) {
+        state.pendingEvents.push({ type: 'breachRevealStep' });
+      }
+    }
+  }
+
   if (t >= seg.introEnd && t < seg.escapeEnd) {
     for (const fish of state.fish) {
       if (!fish.alive) continue;
@@ -241,7 +298,9 @@ function updateBreachingTransition(state: FullGameState, dt: number): void {
     const expected = D.bubbleSpawnRate * dt;
     let nSpawn = Math.floor(expected);
     if (rng.next() < expected - nSpawn) nSpawn += 1;
-    for (let i = 0; i < nSpawn; i += 1) spawnBubbleCluster(state, surfaceDrawH);
+    const bubbleBand: 'default' | 'breachSummaryBottom' =
+      !state.breachLeaderboardDismissed && t <= seg.fadeEnd + 1e-4 ? 'breachSummaryBottom' : 'default';
+    for (let i = 0; i < nSpawn; i += 1) spawnBubbleCluster(state, surfaceDrawH, bubbleBand);
   }
 
   updateOceanBubblesDrift(state, dt);
@@ -551,6 +610,7 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
       breachPlayerExitOffset: 0,
       breachCameraZoom: 1,
       breachLeaderboardAlpha: 0,
+      breachEndSummaryElapsed: 0,
       boatOverlayAlpha,
       menuUiAlpha,
       oceanOverlayAlpha,
@@ -590,7 +650,8 @@ export function buildDiveTransitionDraw(state: FullGameState): DiveTransitionDra
     breachUiAlpha: getBreachUiAlphaFromT(t),
     breachPlayerExitOffset: getBreachPlayerExitOffsetFromT(t),
     breachCameraZoom: getBreachCameraZoomFromT(t),
-      breachLeaderboardAlpha: getBreachPlaceholderOverlayAlpha(state, t),
+    breachLeaderboardAlpha: getBreachPlaceholderOverlayAlpha(state, t),
+    breachEndSummaryElapsed: state.breachSummaryRevealElapsed,
     boatOverlayAlpha: 0,
     menuUiAlpha: 1,
     oceanOverlayAlpha: 0,

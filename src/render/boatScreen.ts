@@ -77,14 +77,7 @@ function drawBoatLeaderboardFab(renderer: GameRenderer): void {
   const iconSz = Math.round(d * 0.52 * 1.2);
   const iconX = Math.round(cx - iconSz / 2);
   const iconY = Math.round(cy - iconSz / 2);
-  renderer.drawImageTinted(
-    { id: AssetIds.uiLeaderboard },
-    iconX,
-    iconY,
-    iconSz,
-    iconSz,
-    Boat.card,
-  );
+  renderer.drawImage({ id: AssetIds.uiLeaderboard }, iconX, iconY, iconSz, iconSz);
 }
 
 const CONSUMABLE_ICON_IDS: Record<'net' | 'bait', string> = {

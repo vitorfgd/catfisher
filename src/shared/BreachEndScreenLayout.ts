@@ -2,6 +2,7 @@ import {
   BOAT_MENU_DIVE_BUTTON_INNER_PAD_X,
   BOAT_SECTION_CONTENT_W,
   BOAT_SECTION_CONTENT_X,
+  CANVAS_HEIGHT,
   CANVAS_WIDTH,
   DIVE_BUTTON_HEIGHT,
 } from '../core/Constants';
@@ -19,26 +20,59 @@ export const BREACH_END_STAT_LABEL_H = 22;
 export const BREACH_END_STAT_VALUE_H = 38;
 export const BREACH_END_STAT_BLOCK_GAP = 22;
 export const BREACH_END_STAT_LABEL_TO_VALUE_GAP = 2;
-/** Space from title band bottom to top of the stat panel. */
-export const BREACH_END_GAP_TITLE_TO_STATS_PANEL = 30;
+/** Space from title band bottom to top of the stat panel (tighter = stats sit higher vs title). */
+export const BREACH_END_GAP_TITLE_TO_STATS_PANEL = 14;
 /** Horizontal padding between stat text bounds and stat panel edge. */
 export const BREACH_END_STATS_PANEL_PAD_X = 30;
 export const BREACH_END_STATS_PANEL_PAD_TOP = 22;
 export const BREACH_END_STATS_PANEL_PAD_BOTTOM = 14;
 export const BREACH_END_STATS_TEXT_W = 220;
 export const BREACH_END_STATS_PANEL_W = BREACH_END_STATS_TEXT_W + BREACH_END_STATS_PANEL_PAD_X * 2;
-/** Space from bottom of stat panel to top of BREACH & UPGRADE button. */
+/** Space from bottom of stat panel to top of end-screen CTA. */
 export const BREACH_END_GAP_STATS_PANEL_TO_BUTTON = 30;
 
-export function getBreachEndSplashDrawRect(): { x: number; y: number; w: number; h: number } {
+const BREACH_END_TOP_MARGIN_MIN = 10;
+
+/** Splash draw size only (same rules as the placed rect). */
+export function getBreachEndSplashDimensions(): { w: number; h: number } {
   let w = BREACH_END_SPLASH_MAX_W;
   let h = w / BREACH_END_SPLASH_ASPECT_WH;
   if (h > BREACH_END_SPLASH_MAX_H) {
     h = BREACH_END_SPLASH_MAX_H;
     w = h * BREACH_END_SPLASH_ASPECT_WH;
   }
+  return { w, h };
+}
+
+/** Pixel height of splash + title + stats panel + CTA button (full end-screen column). */
+export function getBreachEndStackHeight(): number {
+  const { h: splashH } = getBreachEndSplashDimensions();
+  const statRows =
+    3 * (BREACH_END_STAT_LABEL_H + BREACH_END_STAT_LABEL_TO_VALUE_GAP + BREACH_END_STAT_VALUE_H)
+    + 2 * BREACH_END_STAT_BLOCK_GAP;
+  const statsPanelH =
+    BREACH_END_STATS_PANEL_PAD_TOP + statRows + BREACH_END_STATS_PANEL_PAD_BOTTOM;
+  return (
+    splashH
+    + BREACH_END_GAP_BELOW_SPLASH
+    + BREACH_END_TITLE_BAND_H
+    + BREACH_END_GAP_TITLE_TO_STATS_PANEL
+    + statsPanelH
+    + BREACH_END_GAP_STATS_PANEL_TO_BUTTON
+    + DIVE_BUTTON_HEIGHT
+  );
+}
+
+/** Vertical offset so the end-screen stack is centered in the canvas (with a small top clamp). */
+export function getBreachEndContentTopY(): number {
+  const stack = getBreachEndStackHeight();
+  return Math.max(BREACH_END_TOP_MARGIN_MIN, Math.floor((CANVAS_HEIGHT - stack) / 2));
+}
+
+export function getBreachEndSplashDrawRect(): { x: number; y: number; w: number; h: number } {
+  const { w, h } = getBreachEndSplashDimensions();
   const x = (CANVAS_WIDTH - w) / 2;
-  const y = 28;
+  const y = getBreachEndContentTopY();
   return { x, y, w, h };
 }
 

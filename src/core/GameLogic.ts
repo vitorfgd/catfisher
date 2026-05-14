@@ -678,6 +678,8 @@ export function createInitialState(): FullGameState {
     diveSplashEmitted: false,
     breachLeaderboardDismissed: false,
     breachLeaderboardFadeElapsed: 0,
+    breachSummaryRevealElapsed: 0,
+    breachSummaryAnimationsSkipped: false,
     upgradeBackHighlightTimer: 0,
     pendingEvents: [],
     hudConsumableFlash: { net: 0, bait: 0 },
@@ -737,6 +739,8 @@ function resetForNewDive(state: FullGameState): void {
   state.harpoonGunAnimElapsed = -1;
   state.breachLeaderboardDismissed = false;
   state.breachLeaderboardFadeElapsed = 0;
+  state.breachSummaryRevealElapsed = 0;
+  state.breachSummaryAnimationsSkipped = false;
   state.boatLeaderboardOpen = false;
 }
 
@@ -798,6 +802,7 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
     if (command.type === 'openBoatLeaderboard') {
       state.upgradePanelOpen = null;
       state.boatLeaderboardOpen = true;
+      state.pendingEvents.push({ type: 'boatLeaderboardOpened' });
       continue;
     }
     if (command.type === 'closeBoatLeaderboard') {
@@ -853,10 +858,12 @@ function updateBoat(state: FullGameState, commands: GameInputCommand[]): void {
         if (state.consumables.net >= NET_MAX_STOCK || state.money < NET_COST) continue;
         state.money -= NET_COST;
         state.consumables.net += 1;
+        state.pendingEvents.push({ type: 'gearPurchased', id: 'net' });
       } else if (command.id === 'bait') {
         if (state.consumables.bait >= BAIT_MAX_STOCK || state.money < BAIT_COST) continue;
         state.money -= BAIT_COST;
         state.consumables.bait += 1;
+        state.pendingEvents.push({ type: 'gearPurchased', id: 'bait' });
       }
       triggerTutorialHint(state, 'gear');
       continue;
@@ -908,9 +915,20 @@ function updateDiving(state: FullGameState, dt: number): void {
 
 function updateBreaching(state: FullGameState, dt: number, commands: GameInputCommand[]): void {
   for (const command of commands) {
+    if (command.type === 'breachEndScreenTap' && isBreachingAwaitingConfirm(state)) {
+      if (!state.breachSummaryAnimationsSkipped) {
+        state.breachSummaryAnimationsSkipped = true;
+      } else {
+        state.breachLeaderboardDismissed = true;
+        state.breachLeaderboardFadeElapsed = 0;
+        state.pendingEvents.push({ type: 'breachBackToBoat' });
+      }
+      break;
+    }
     if (command.type === 'confirmBreachToBoat' && isBreachingAwaitingConfirm(state)) {
       state.breachLeaderboardDismissed = true;
       state.breachLeaderboardFadeElapsed = 0;
+      state.pendingEvents.push({ type: 'breachBackToBoat' });
       break;
     }
   }
@@ -2000,6 +2018,7 @@ export function getRenderState(state: FullGameState): RenderState {
     baitY: state.baitY,
     baitFraction: state.baitActive ? state.baitTimer / BAIT_DURATION : 0,
     diveTransition: buildDiveTransitionDraw(state),
+    breachSummaryAnimationsSkipped: state.breachSummaryAnimationsSkipped,
     lastRunEarnings: state.lastRunEarnings,
     lastRunDurationSec: state.lastRunDurationSec,
     lastRunCatchCount: state.lastRunCatchCount,

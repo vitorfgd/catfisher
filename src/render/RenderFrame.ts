@@ -1052,7 +1052,7 @@ export function renderFrame(renderer: GameRenderer, state: RenderState): void {
     }
     drawDiveWaterlineVfx(renderer, state.diveTransition);
     // End-screen (stats + CTA) must draw above waterline/bubbles so it stays readable while the
-    // transition is paused waiting for BREACH & UPGRADE.
+    // transition is paused waiting for BACK TO BOAT.
     drawBreachPlaceholderOverlay(renderer, state, state.diveTransition.breachLeaderboardAlpha);
   }
 }

@@ -199,6 +199,14 @@ export type GameEvent =
   | { type: 'transitionWaterlineBubbles' }
   | { type: 'runEnded'; earnings: number; runDurationSec: number; catchCount: number }
   | { type: 'upgradeBought'; id: string }
+  /** Boat menu: leaderboard FAB opened (same ack tone as GO FISH / `diveStarted`). */
+  | { type: 'boatLeaderboardOpened' }
+  /** Boat shop: net or bait stock increased after a paid purchase. */
+  | { type: 'gearPurchased'; id: 'net' | 'bait' }
+  /** Breach end-card: fish / time / money row step (UI pop). */
+  | { type: 'breachRevealStep' }
+  /** Breach end screen: player confirmed BACK TO BOAT (same tone as `diveStarted` / GO FISH). */
+  | { type: 'breachBackToBoat' }
   | { type: 'ftueDiveExited' }
   | { type: 'ftueOxygenLessonShown' }
   | { type: 'tutorialHintShown'; id: TutorialHintId };
@@ -332,6 +340,13 @@ export interface FullGameState {
   breachLeaderboardDismissed: boolean;
   /** Game→menu: fade timer after leaderboard dismissal. */
   breachLeaderboardFadeElapsed: number;
+  /**
+   * Game→menu: unscaled seconds since the dive-complete summary appeared (`breachTimer` pauses at
+   * `fadeEnd` while awaiting tap — this keeps running for staged UI + VFX).
+   */
+  breachSummaryRevealElapsed: number;
+  /** Game→menu: player skipped staged summary counts; next tap returns to boat. */
+  breachSummaryAnimationsSkipped: boolean;
   /** Boat upgrade panel: briefly highlights Back after a successful upgrade. */
   upgradeBackHighlightTimer: number;
 

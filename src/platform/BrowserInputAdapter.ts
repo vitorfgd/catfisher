@@ -18,7 +18,6 @@ import {
   isBoatLeaderboardFabHit,
   isLeaderboardModalCloseHit,
 } from '../shared/LeaderboardOverlayLayout';
-import { isBreachAndUpgradeButtonHit } from '../shared/BreachEndScreenLayout';
 
 function clientToLogical(
   clientX: number,
@@ -121,9 +120,7 @@ export class BrowserInputAdapter implements InputAdapter {
     }
 
     if (this.breachAwaitingConfirm) {
-      if (isBreachAndUpgradeButtonHit(x, y)) {
-        this.commands.push({ type: 'confirmBreachToBoat' });
-      }
+      this.commands.push({ type: 'breachEndScreenTap' });
       return;
     }
 

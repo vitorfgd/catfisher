@@ -49,6 +49,11 @@ export interface DiveTransitionDraw {
   breachCameraZoom: number;
   /** Game→menu: click-to-dismiss leaderboard interstitial alpha. */
   breachLeaderboardAlpha: number;
+  /**
+   * Game→menu: seconds since the dive-complete summary appeared (real-time; not derived from
+   * `breachTimer`, which pauses at `fadeEnd` while awaiting tap).
+   */
+  breachEndSummaryElapsed: number;
   /** Extra full-bleed boat layer faded in over the menu during the dive intro. */
   boatOverlayAlpha: number;
   /** Boat menu chrome opacity (GO FISH, stats, …). */
@@ -171,6 +176,8 @@ export interface RenderState {
 
   // Transition / scene chrome (`Diving`, early `Breaching`; null otherwise)
   diveTransition: DiveTransitionDraw | null;
+  /** Game→menu: breach summary counts were skipped to show final values immediately. */
+  breachSummaryAnimationsSkipped: boolean;
 
   /** Brief warm flash when catch money registers (0 = off) */
   catchFlash: number;

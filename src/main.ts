@@ -91,6 +91,10 @@ async function main(): Promise<void> {
     toPublicAssetUrl(BrowserAssetManifest.sounds.waterlineBubbles),
     toPublicAssetUrl(BrowserAssetManifest.sounds.underwaterAmbient),
     toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonShot),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.shopPurchase),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.gearPurchase),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.breachRevealStep),
+    toPublicAssetUrl(BrowserAssetManifest.sounds.breachMoneyChime),
   );
   const leaderboard = new BrowserFakeLeaderboardAdapter();
   const gameState = createInitialState();

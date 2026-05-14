@@ -9,4 +9,6 @@ export type GameInputCommand =
   | { type: 'buyUpgrade'; id: UpgradeId }
   | { type: 'buyConsumable'; id: 'net' | 'bait' }
   | { type: 'useConsumable'; id: 'net' | 'bait' }
+  /** Breach end summary: first tap skips staged counts; second tap returns to boat. */
+  | { type: 'breachEndScreenTap' }
   | { type: 'confirmBreachToBoat' };

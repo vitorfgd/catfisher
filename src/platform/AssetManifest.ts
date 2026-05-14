@@ -67,6 +67,14 @@ export const BrowserAssetManifest = {
     underwaterAmbient: 'assets/underwater-ambient.ogg',
     /** Action: one-shot when the player fires the harpoon. */
     harpoonShot: 'assets/harpoon-shot.ogg',
+    /** Breach end screen: stagger step (splash, panel, rows, CTA). */
+    breachRevealStep: 'assets/sfx-breach-reveal-step.ogg',
+    /** Breach end screen: very quiet loop under money line count-up. */
+    breachMoneyChime: 'assets/sfx-breach-money-chime.ogg',
+    /** Boat shop: upgrade purchase (cash register). */
+    shopPurchase: 'assets/sfx-shop-purchase.ogg',
+    /** Boat shop: net / bait purchase (chime). */
+    gearPurchase: 'assets/sfx-gear-purchase.ogg',
   },
 } as const;
 
