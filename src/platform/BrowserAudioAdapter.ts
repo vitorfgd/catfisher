@@ -14,7 +14,6 @@ const UNDERWATER_AMBIENT_VOLUME = 0.1;
 const UNDERWATER_AMBIENT_FADE_OUT_SEC = 1.2;
 /** Boat menu sea loop — louder than default HTMLAudio 0.1 so it reads on laptop speakers. */
 const BOAT_MENU_AMBIENT_VOLUME = 0.32;
-const HARPOON_SHOT_VOLUME = 0.1;
 const SHOP_PURCHASE_VOLUME = 0.55;
 const GEAR_PURCHASE_VOLUME = 0.5;
 const BREACH_REVEAL_STEP_VOLUME = 0.22;
@@ -29,7 +28,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
   private readonly waterlineBubbles: HTMLAudioElement | null = null;
   private readonly boatMenuLoop: HTMLAudioElement | null = null;
   private readonly underwaterLoop: HTMLAudioElement | null = null;
-  private readonly harpoonShot: HTMLAudioElement | null = null;
   private readonly shopPurchase: HTMLAudioElement | null = null;
   private readonly gearPurchase: HTMLAudioElement | null = null;
   private readonly breachRevealStepVoices: HTMLAudioElement[] = [];
@@ -49,7 +47,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
     diverEntryPercSrc?: string,
     waterlineBubblesSrc?: string,
     underwaterLoopSrc?: string,
-    harpoonShotSrc?: string,
     shopPurchaseSrc?: string,
     gearPurchaseSrc?: string,
     breachRevealStepSrc?: string,
@@ -89,13 +86,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
       loop.preload = 'auto';
       this.underwaterLoop = loop;
     }
-    if (harpoonShotSrc != null && harpoonShotSrc !== '') {
-      const clip = new Audio(harpoonShotSrc);
-      clip.volume = HARPOON_SHOT_VOLUME;
-      clip.preload = 'auto';
-      clip.load();
-      this.harpoonShot = clip;
-    }
     if (shopPurchaseSrc != null && shopPurchaseSrc !== '') {
       const clip = new Audio(shopPurchaseSrc);
       clip.volume = SHOP_PURCHASE_VOLUME;
@@ -129,8 +119,8 @@ export class BrowserAudioAdapter implements AudioAdapter {
     }
 
     const onFirstGesture = (): void => this.unlockAmbientAudio();
-    window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true });
-    window.addEventListener('keydown', onFirstGesture, { once: true });
+    window.addEventListener('pointerdown', onFirstGesture, { once: true, passive: true, capture: true });
+    window.addEventListener('keydown', onFirstGesture, { once: true, capture: true });
   }
 
   private getCtx(): AudioContext {
@@ -359,18 +349,6 @@ export class BrowserAudioAdapter implements AudioAdapter {
     }
   }
 
-  private playHarpoonShot(): void {
-    if (this.harpoonShot == null) return;
-    try {
-      this.harpoonShot.pause();
-      this.harpoonShot.currentTime = 0;
-      this.harpoonShot.volume = HARPOON_SHOT_VOLUME;
-      void this.harpoonShot.play().catch(() => {});
-    } catch {
-      // Ignore decode / playback failures.
-    }
-  }
-
   private playShopPurchase(): void {
     if (this.shopPurchase == null) return;
     try {
@@ -438,7 +416,7 @@ export class BrowserAudioAdapter implements AudioAdapter {
         break;
       }
       case 'spearFired':
-        this.playHarpoonShot();
+        // Played synchronously from the pointer event so browsers do not block the one-shot.
         break;
       case 'diveStarted':
       case 'breachBackToBoat':

@@ -66,7 +66,7 @@ export const BrowserAssetManifest = {
     /** Dive / gameplay / breach: looping depth bed (everything except boat menu). */
     underwaterAmbient: 'assets/underwater-ambient.ogg',
     /** Action: one-shot when the player fires the harpoon. */
-    harpoonShot: 'assets/harpoon-shot.ogg',
+    harpoonShot: 'assets/harpoon-fire.ogg',
     /** Breach end screen: stagger step (splash, panel, rows, CTA). */
     breachRevealStep: 'assets/sfx-breach-reveal-step.ogg',
     /** Breach end screen: very quiet loop under money line count-up. */

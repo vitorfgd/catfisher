@@ -2,6 +2,7 @@
 // Do not import platform code from core/ or render/.
 
 import { CANVAS_HEIGHT, CANVAS_WIDTH, GAME_ASPECT_RATIO } from './core/Constants';
+import { GamePhase } from './core/Types';
 import {
   applyFtueOxygenLessonSeen,
   applyMusicMutedPreference,
@@ -83,14 +84,12 @@ async function main(): Promise<void> {
   }
 
   const renderer = new Canvas2DRenderer(ctx, images, CANVAS_WIDTH, CANVAS_HEIGHT);
-  const input = new BrowserInputAdapter(canvas);
   const audio = new BrowserAudioAdapter(
     toPublicAssetUrl(BrowserAssetManifest.sounds.backgroundMusic),
     toPublicAssetUrl(BrowserAssetManifest.sounds.boatMenuAmbient),
     toPublicAssetUrl(BrowserAssetManifest.sounds.diverEntryPerc),
     toPublicAssetUrl(BrowserAssetManifest.sounds.waterlineBubbles),
     toPublicAssetUrl(BrowserAssetManifest.sounds.underwaterAmbient),
-    toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonShot),
     toPublicAssetUrl(BrowserAssetManifest.sounds.shopPurchase),
     toPublicAssetUrl(BrowserAssetManifest.sounds.gearPurchase),
     toPublicAssetUrl(BrowserAssetManifest.sounds.breachRevealStep),
@@ -114,6 +113,13 @@ async function main(): Promise<void> {
     bootstrapActionFtueDive(gameState);
   }
   applyFtueOxygenLessonSeen(gameState, isFtueOxygenLessonSeenInStorage());
+  const input = new BrowserInputAdapter(
+    canvas,
+    toPublicAssetUrl(BrowserAssetManifest.sounds.harpoonShot),
+    () => gameState.phase === GamePhase.Action
+      && gameState.player.shootCooldown <= 0
+      && gameState.spears.length === 0,
+  );
 
   const loop = new BrowserGameLoop(gameState, renderer, input, audio, leaderboard);
   loop.start();

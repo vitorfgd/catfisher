@@ -19,6 +19,9 @@ import {
   isLeaderboardModalCloseHit,
 } from '../shared/LeaderboardOverlayLayout';
 
+const HARPOON_FIRE_VOLUME = 0.1;
+const HARPOON_FIRE_VOICES = 4;
+
 function clientToLogical(
   clientX: number,
   clientY: number,
@@ -36,12 +39,29 @@ function clientToLogical(
 
 export class BrowserInputAdapter implements InputAdapter {
   private readonly commands: GameInputCommand[] = [];
+  private readonly harpoonFireVoices: HTMLAudioElement[] = [];
+  private harpoonFireVoiceIx = 0;
   private isBoatPhase = true;
   private upgradePanelOpen: keyof UpgradeState | null = null;
   private boatLeaderboardOpen = false;
   private breachAwaitingConfirm = false;
 
-  constructor(private readonly canvas: HTMLCanvasElement) {
+  constructor(
+    private readonly canvas: HTMLCanvasElement,
+    harpoonFireSrc?: string,
+    private readonly canPlayHarpoonFire: () => boolean = () => true,
+  ) {
+    if (harpoonFireSrc != null && harpoonFireSrc !== '') {
+      for (let i = 0; i < HARPOON_FIRE_VOICES; i += 1) {
+        const clip = new Audio(harpoonFireSrc);
+        clip.volume = HARPOON_FIRE_VOLUME;
+        clip.preload = 'auto';
+        clip.load();
+        this.harpoonFireVoices.push(clip);
+      }
+      window.addEventListener('pointerdown', this.primeHarpoonFire, { once: true, passive: true, capture: true });
+      window.addEventListener('keydown', this.primeHarpoonFire, { once: true, capture: true });
+    }
     canvas.addEventListener('pointerdown', this.onPointerDown);
     canvas.addEventListener('contextmenu', (event) => event.preventDefault());
   }
@@ -67,6 +87,41 @@ export class BrowserInputAdapter implements InputAdapter {
 
   drainCommands(): GameInputCommand[] {
     return this.commands.splice(0);
+  }
+
+  private readonly primeHarpoonFire = (): void => {
+    const clip = this.harpoonFireVoices[0];
+    if (clip == null) return;
+    try {
+      clip.muted = true;
+      void clip.play().then(() => {
+        clip.pause();
+        clip.currentTime = 0;
+        clip.muted = false;
+        clip.volume = HARPOON_FIRE_VOLUME;
+      }).catch(() => {
+        clip.muted = false;
+      });
+    } catch {
+      clip.muted = false;
+    }
+  };
+
+  private playHarpoonFire(): void {
+    const clip = this.harpoonFireVoices[this.harpoonFireVoiceIx % this.harpoonFireVoices.length];
+    this.harpoonFireVoiceIx += 1;
+    if (clip == null) return;
+    try {
+      clip.pause();
+      clip.currentTime = 0;
+      clip.muted = false;
+      clip.volume = HARPOON_FIRE_VOLUME;
+    } catch {
+      // Continue into play(); browsers may still accept playback even if seeking failed.
+    }
+    void clip.play().catch((error: unknown) => {
+      console.warn('[audio] harpoon-fire failed to play', error);
+    });
   }
 
   private readonly onPointerDown = (event: PointerEvent): void => {
@@ -131,10 +186,15 @@ export class BrowserInputAdapter implements InputAdapter {
       return;
     }
 
+    if (this.canPlayHarpoonFire()) {
+      this.playHarpoonFire();
+    }
     this.commands.push({ type: 'tap', x, y });
   };
 
   dispose(): void {
     this.canvas.removeEventListener('pointerdown', this.onPointerDown);
+    window.removeEventListener('pointerdown', this.primeHarpoonFire, { capture: true });
+    window.removeEventListener('keydown', this.primeHarpoonFire, { capture: true });
   }
 }
